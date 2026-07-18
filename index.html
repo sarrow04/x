@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>毎日フェルミ捜査 | データ探偵事務所</title>
+<style>
+:root {
+  --paper: #E8DCC3;
+  --card: #FBF7EC;
+  --ink: #1F2A38;
+  --stamp: #B3402E;
+  --line: #C9B792;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--paper);
+  background-image: repeating-linear-gradient(0deg, transparent, transparent 31px, rgba(31,42,56,0.04) 31px, rgba(31,42,56,0.04) 32px);
+  color: var(--ink);
+  font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+  line-height: 1.7;
+  padding: 16px 12px 60px;
+}
+.wrap { max-width: 640px; margin: 0 auto; }
+header { text-align: center; margin-bottom: 20px; }
+.agency {
+  font-size: 11px;
+  letter-spacing: 0.4em;
+  color: var(--stamp);
+  font-weight: 600;
+}
+h1 {
+  font-family: "Hiragino Mincho ProN", "Yu Mincho", serif;
+  font-size: 26px;
+  letter-spacing: 0.12em;
+  margin-top: 2px;
+}
+.streak {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 12px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 2px 10px;
+  background: var(--card);
+}
+.case-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 20px 18px 18px;
+  position: relative;
+  box-shadow: 0 2px 6px rgba(31,42,56,0.08);
+  margin-bottom: 16px;
+}
+.file-stamp {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  transform: rotate(6deg);
+  border: 2px solid var(--stamp);
+  color: var(--stamp);
+  font-family: "Hiragino Mincho ProN", serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 3px 8px;
+  border-radius: 2px;
+  opacity: 0.85;
+  text-align: center;
+  line-height: 1.4;
+  pointer-events: none;
+}
+.cat-tag {
+  display: inline-block;
+  font-size: 11px;
+  background: var(--ink);
+  color: var(--card);
+  padding: 1px 8px;
+  border-radius: 2px;
+  letter-spacing: 0.1em;
+  margin-bottom: 8px;
+}
+.question {
+  font-family: "Hiragino Mincho ProN", "Yu Mincho", serif;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.6;
+  padding-right: 60px;
+  min-height: 60px;
+}
+.q-actions { margin-top: 10px; }
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--stamp);
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 4px;
+}
+label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  margin: 14px 0 4px;
+}
+input[type="text"], textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 15px;
+  padding: 8px 10px;
+  color: var(--ink);
+}
+textarea { min-height: 90px; resize: vertical; }
+input:focus, textarea:focus { outline: 2px solid var(--stamp); outline-offset: 1px; }
+.hint { font-size: 11px; color: #6b6152; margin-top: 3px; }
+.calc-keys { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.calc-keys button {
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  border-radius: 3px;
+  min-width: 40px;
+  padding: 8px 0;
+  font-size: 16px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.calc-keys button:active { background: var(--line); }
+.calc-keys .key-clear { color: var(--stamp); font-weight: 700; }
+.var-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.var-row .var-name {
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 96px;
+  border-left: 3px solid var(--stamp);
+  padding-left: 6px;
+}
+.var-row input { flex: 1; }
+.calc-result {
+  font-family: "Courier New", monospace;
+  font-size: 18px;
+  font-weight: 700;
+  background: var(--ink);
+  color: var(--card);
+  border-radius: 3px;
+  padding: 8px 12px;
+  margin-top: 6px;
+  min-height: 40px;
+  word-break: break-all;
+}
+.calc-result .calc-raw { font-size: 11px; font-weight: 400; opacity: 0.7; display: block; }
+.calc-result.err { color: #E8A398; }
+.calc-steps { margin-top: 4px; }
+.step-line {
+  font-size: 12px;
+  background: var(--card);
+  border-left: 3px solid var(--line);
+  padding: 4px 8px;
+  margin-top: 4px;
+  word-break: break-all;
+}
+.step-line .step-val { color: var(--stamp); font-weight: 700; }
+.calc-actions { margin-top: 8px; }
+.calc-actions .btn { padding: 9px 0; font-size: 13px; background: none; border: 1px solid var(--ink); color: var(--ink); }
+.preview {
+  white-space: pre-wrap;
+  background: #fff;
+  border: 1px dashed var(--line);
+  border-radius: 3px;
+  padding: 12px;
+  font-size: 14px;
+  margin-top: 6px;
+  word-break: break-all;
+}
+.count { font-size: 12px; text-align: right; margin-top: 4px; }
+.count.over { color: var(--stamp); font-weight: 700; }
+.btn-row { display: flex; gap: 10px; margin-top: 14px; }
+.btn {
+  flex: 1;
+  border: none;
+  border-radius: 3px;
+  padding: 12px 0;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  letter-spacing: 0.08em;
+}
+.btn-copy { background: var(--ink); color: var(--card); }
+.btn-post { background: var(--stamp); color: #fff; }
+.btn:active { opacity: 0.8; }
+.toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ink);
+  color: var(--card);
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-size: 13px;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+.toast.show { opacity: 1; }
+.history { margin-top: 24px; }
+.history h2 {
+  font-family: "Hiragino Mincho ProN", serif;
+  font-size: 15px;
+  letter-spacing: 0.1em;
+  border-bottom: 2px solid var(--ink);
+  padding-bottom: 4px;
+  margin-bottom: 8px;
+}
+.h-item {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+.h-item .h-date { font-size: 11px; color: #6b6152; }
+.h-item .h-a { font-weight: 700; color: var(--stamp); }
+footer { text-align: center; font-size: 11px; color: #6b6152; margin-top: 30px; letter-spacing: 0.1em; }
+@media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="agency">データ探偵事務所</div>
+    <h1>毎日フェルミ捜査</h1>
+    <div class="streak" id="streakBox">連続捜査 0日</div>
+  </header>
+
+  <div class="case-card">
+    <div class="file-stamp" id="fileStamp">File #000<br><span id="stampDate"></span></div>
+    <span class="cat-tag" id="catTag">捜査中</span>
+    <div class="question" id="questionBox">読み込み中…</div>
+    <div class="q-actions">
+      <button class="link-btn" id="btnAnother" type="button">別の事件を捜査する</button>
+      <button class="link-btn" id="btnToday" type="button">今日の事件に戻る</button>
+    </div>
+
+    <label for="calcInput">捜査計算機 — まず式を言葉で組む</label>
+    <input type="text" id="calcInput" placeholder="例:入電数×処理時間÷稼働時間">
+    <div class="hint">「名前(式)」と書くと名前は注釈扱い:1時間の入電件数(総入電÷営業時間)×人数</div>
+    <div class="calc-keys">
+      <button type="button" data-k="+">+</button>
+      <button type="button" data-k="−">−</button>
+      <button type="button" data-k="×">×</button>
+      <button type="button" data-k="÷">÷</button>
+      <button type="button" data-k="(">(</button>
+      <button type="button" data-k=")">)</button>
+      <button type="button" data-k="万">万</button>
+      <button type="button" data-k="億">億</button>
+      <button type="button" data-k="%">%</button>
+      <button type="button" class="key-clear" id="keyClear">C</button>
+    </div>
+    <div id="calcVars"></div>
+    <div class="calc-result" id="calcResult">= </div>
+    <div class="calc-steps" id="calcSteps"></div>
+    <div class="btn-row calc-actions">
+      <button class="btn" id="btnToAnswer" type="button">結果をA.に転記</button>
+      <button class="btn" id="btnToLogic" type="button">式ごと分解メモへ</button>
+    </div>
+
+    <label for="answerInput">A. 結論(概算値)</label>
+    <input type="text" id="answerInput" placeholder="例:7人(余裕率込みで8人)">
+
+    <label for="logicInput">分解メモ(推定の筋道)</label>
+    <textarea id="logicInput" placeholder="例:50件×8分=400分 ÷ 稼働330分/人 ≒ 1.2人 → ピーク集中を見て…"></textarea>
+    <div class="hint">処理能力 vs 需要の形で書くとボトルネックが伝わる</div>
+
+    <label>投稿プレビュー</label>
+    <div class="preview" id="preview"></div>
+    <div class="count" id="countBox">0 / 280</div>
+
+    <div class="btn-row">
+      <button class="btn btn-copy" id="btnCopy" type="button">コピー</button>
+      <button class="btn btn-post" id="btnPost" type="button">Xで投稿</button>
+    </div>
+  </div>
+
+  <div class="history">
+    <h2>捜査記録</h2>
+    <div id="historyBox"></div>
+  </div>
+
+  <footer>DATA DETECTIVE AGENCY — DAILY ESTIMATION CASE FILES</footer>
+</div>
+<div class="toast" id="toast">コピーしました</div>
+
+<script>
+var QUESTIONS = [
+  // 電話・受付DX
+  { c: "電話・受付", q: "1日50件の入電を取り逃しゼロで捌くには、オペレーター何人必要?" },
+  { c: "電話・受付", q: "平均通話5分+後処理3分のコールセンター。1人が1日に対応できる件数は?" },
+  { c: "電話・受付", q: "入電の3割をAI自動応答に置き換えたら、10人のセンターは何人で回る?" },
+  { c: "電話・受付", q: "1日200件の架電で商談化率2%。月10商談を作るのに必要な架電人員は?" },
+  { c: "電話・受付", q: "電話予約の5割をWeb予約に移行したら、受付の空き時間は月何時間生まれる?" },
+  { c: "電話・受付", q: "昼12〜13時に入電の4割が集中する店。ピーク帯の必要受付人数は?" },
+  { c: "電話・受付", q: "営業電話・迷惑電話の対応で、会社は年間何時間失っている?" },
+  { c: "電話・受付", q: "病院の代表電話、1日の入電のうち「よくある質問」で終わる件数は?" },
+  { c: "電話・受付", q: "応答率を80%→95%に上げるには、オペレーターを何人追加すべき?" },
+  { c: "電話・受付", q: "AI音声で一次受付したら、人への転送が必要な電話は1日何件残る?" },
+  { c: "電話・受付", q: "留守電の折り返し対応、1人で回せるのは1日何件まで?" },
+  { c: "電話・受付", q: "予約電話の平均待ち時間を30秒以内にするには、回線と人は何本・何人必要?" },
+  // 業務自動化
+  { c: "業務自動化", q: "毎朝30分の売上集計をGASで自動化したら、年間何時間浮く?" },
+  { c: "業務自動化", q: "紙の請求書100枚/月をOCR化したら、入力工数は月何時間減る?" },
+  { c: "業務自動化", q: "1日500件の手入力業務、RPA化の損益分岐は何ヶ月?" },
+  { c: "業務自動化", q: "Excel手転記のミス率1%の職場。月に何件の手戻りが発生している?" },
+  { c: "業務自動化", q: "週次レポート作成を自動化すべき社員は、100人の会社に何人いる?" },
+  { c: "業務自動化", q: "承認印を電子化したら、書類1枚あたりのリードタイムは何日縮む?" },
+  { c: "業務自動化", q: "全社のパスワードリセット対応に、情シスは年間何時間かけている?" },
+  { c: "業務自動化", q: "議事録作成をAI化したら、会社全体で月何時間浮く?" },
+  { c: "業務自動化", q: "FAX受注を廃止したら、1日あたり何分の工数が浮く?" },
+  { c: "業務自動化", q: "メール仕分けの自動化で、1人あたり1日何分節約できる?" },
+  { c: "業務自動化", q: "交通費精算の自動化は、全社で年間いくらの工数削減になる?" },
+  { c: "業務自動化", q: "問い合わせメールの7割をFAQで解決したら、対応人員は何人減らせる?" },
+  // HR・採用オペレーション
+  { c: "HRオペレーション", q: "月30人採用するには、面接官の稼働は月何時間必要?" },
+  { c: "HRオペレーション", q: "書類選考を1件5分→AI補助で1分にしたら、採用担当は何人分浮く?" },
+  { c: "HRオペレーション", q: "応募者との日程調整メール、自動化前は月何通打っている?" },
+  { c: "HRオペレーション", q: "面接ドタキャン率20%の会社。枠の埋め直しに年間何時間かかる?" },
+  { c: "HRオペレーション", q: "スカウト返信率5%で月10面談を作るには、月何通送る必要がある?" },
+  { c: "HRオペレーション", q: "入社手続きの電子化で、1人あたりの手続き時間は何分縮む?" },
+  { c: "HRオペレーション", q: "従業員100人の会社、勤怠の締め作業に毎月何時間かかっている?" },
+  { c: "HRオペレーション", q: "面接をオンライン化したら、面接官の月間稼働は何時間浮く?" },
+  { c: "HRオペレーション", q: "採用媒体3つをATSに一元化したら、週何時間の管理工数が浮く?" },
+  { c: "HRオペレーション", q: "バイト面接の無断キャンセルによる機会損失は、年間何人分の採用?" },
+  { c: "HRオペレーション", q: "新人研修を動画化したら、講師の年間稼働は何時間減る?" },
+  { c: "HRオペレーション", q: "給与明細の紙配布をやめたら、年間コストはいくら減る?" },
+  // 店舗・現場DX
+  { c: "店舗・現場", q: "券売機を入れたら、ラーメン店の回転率は何%上がる?" },
+  { c: "店舗・現場", q: "セルフレジ1台は、レジ係何人分の働きをする?" },
+  { c: "店舗・現場", q: "モバイルオーダー導入で、カフェのピーク時の行列は何人減る?" },
+  { c: "店舗・現場", q: "棚卸しをバーコード化したら、作業時間は何時間→何時間になる?" },
+  { c: "店舗・現場", q: "美容室のネット予約率を5割にしたら、施術中の電話対応は1日何件減る?" },
+  { c: "店舗・現場", q: "日次売上の集計を自動化したら、店長の残業は月何時間減る?" },
+  { c: "店舗・現場", q: "タブレット注文の導入で、ホールスタッフは何人減らせる?" },
+  { c: "店舗・現場", q: "完全キャッシュレス化で、レジ締め作業は1日何分短縮できる?" },
+  { c: "店舗・現場", q: "順番待ちアプリで、病院の待合室の滞在時間は何分減る?" },
+  { c: "店舗・現場", q: "再配達をゼロにしたら、ドライバー1人の1日の配達数は何件増える?" },
+  { c: "店舗・現場", q: "店頭ポスターをサイネージ化したら、張り替え工数は年間何時間減る?" },
+  { c: "店舗・現場", q: "店舗日報をチャット報告にしたら、SVの巡回は何割減らせる?" },
+  // ボトルネック捜査
+  { c: "ボトルネック", q: "工程A(10分)→B(30分)→C(15分)のライン。1日8時間での最大処理数は?" },
+  { c: "ボトルネック", q: "受付100件/日・審査40件/日・発送80件/日の業務。月末の滞留は何件?" },
+  { c: "ボトルネック", q: "レジ2台・会計90秒の店。行列ができ始めるのは1時間あたり何人から?" },
+  { c: "ボトルネック", q: "承認者が1人だけの稟議フロー。月100件申請なら滞留は何日分たまる?" },
+  { c: "ボトルネック", q: "回答者3人・1件20分・1日入電60件のサポート窓口。残業は毎日何時間?" },
+  { c: "ボトルネック", q: "エレベーター1基のビル。朝の2分間に捌ける入館者は何人?" },
+  { c: "ボトルネック", q: "面接官2人で月80応募を捌くと、選考リードタイムは何日になる?" },
+  { c: "ボトルネック", q: "共有プリンター1台の事務所。2台目増設が割に合うのは月何枚から?" },
+  { c: "ボトルネック", q: "電話8件+メール20件が毎時来る窓口。1人で回るのは何時まで?" },
+  { c: "ボトルネック", q: "駐車場10台・平均滞在40分の店。1日の最大来店組数は?" },
+  { c: "ボトルネック", q: "検品1人(1件3分)に毎日200件届いたら、遅延が1週間分になるのは何日後?" },
+  { c: "ボトルネック", q: "会議室3室の会社。予約が取り合いになるのは社員何人を超えたとき?" }
+];
+
+var EPOCH = new Date(2026, 6, 18); // 2026-07-18 = File #001
+var currentIndex = 0;
+var todayIndex = 0;
+var fileNo = 1;
+
+function daysSinceEpoch() {
+  var now = new Date();
+  var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((today - EPOCH) / 86400000);
+}
+
+// 日付シードのシャッフル用LCG(同じ日は全員同じお題)
+function pickIndexForDay(d) {
+  var seed = (d * 2654435761) % 4294967296;
+  seed = (seed ^ (seed >>> 13)) >>> 0;
+  return seed % QUESTIONS.length;
+}
+
+function todayKey() {
+  var n = new Date();
+  return n.getFullYear() + "-" + (n.getMonth() + 1) + "-" + n.getDate();
+}
+
+function showQuestion(idx) {
+  currentIndex = idx;
+  var item = QUESTIONS[idx];
+  document.getElementById("catTag").textContent = item.c;
+  document.getElementById("questionBox").textContent = "Q. " + item.q;
+  document.getElementById("btnToday").style.display = (idx === todayIndex) ? "none" : "inline";
+  updatePreview();
+}
+
+function buildPost() {
+  var a = document.getElementById("answerInput").value.trim();
+  var logic = document.getElementById("logicInput").value.trim();
+  var lines = [];
+  lines.push("\uD83D\uDD0D フェルミ捜査 File #" + pad3(fileNo));
+  lines.push(QUESTIONS[currentIndex].q);
+  lines.push("");
+  lines.push("A. " + (a || "(結論を入力)"));
+  if (logic) {
+    lines.push("");
+    lines.push("【分解】");
+    lines.push(logic);
+  }
+  lines.push("");
+  lines.push("#フェルミ推定 #データ探偵事務所");
+  return lines.join("\n");
+}
+
+// X加重文字数(全角2・半角1、上限280)
+function weightedLength(str) {
+  var total = 0;
+  var i = 0;
+  while (i < str.length) {
+    var code = str.codePointAt(i);
+    if (code <= 0x10FF || (code >= 0x2000 && code <= 0x200A) || code === 0x000A) {
+      total += 1;
+    } else {
+      total += 2;
+    }
+    i += (code > 0xFFFF) ? 2 : 1;
+  }
+  return total;
+}
+
+function updatePreview() {
+  var text = buildPost();
+  document.getElementById("preview").textContent = text;
+  var len = weightedLength(text);
+  var box = document.getElementById("countBox");
+  box.textContent = len + " / 280";
+  box.className = (len > 280) ? "count over" : "count";
+}
+
+function pad3(n) {
+  var s = String(n);
+  while (s.length < 3) { s = "0" + s; }
+  return s;
+}
+
+function copyText() {
+  var text = buildPost();
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function () {
+      afterAction("コピーしました");
+    }, function () { fallbackCopy(text); });
+  } else {
+    fallbackCopy(text);
+  }
+}
+
+function fallbackCopy(text) {
+  var ta = document.createElement("textarea");
+  ta.value = text;
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand("copy"); } catch (e) {}
+  document.body.removeChild(ta);
+  afterAction("コピーしました");
+}
+
+function postToX() {
+  var text = buildPost();
+  var url = "https://twitter.com/intent/tweet?text=" + encodeURIComponent(text);
+  afterAction("Xを開きます");
+  window.open(url, "_blank");
+}
+
+function afterAction(msg) {
+  showToast(msg);
+  saveHistory();
+  updateStreak();
+}
+
+function showToast(msg) {
+  var t = document.getElementById("toast");
+  t.textContent = msg;
+  t.className = "toast show";
+  setTimeout(function () { t.className = "toast"; }, 1800);
+}
+
+function loadJSON(key, fallback) {
+  try {
+    var raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch (e) { return fallback; }
+}
+
+function updateStreak() {
+  var data = loadJSON("fermiDaily_streak", { last: "", count: 0 });
+  var tk = todayKey();
+  if (data.last === tk) { renderStreak(data.count); return; }
+  var yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  var yk = yesterday.getFullYear() + "-" + (yesterday.getMonth() + 1) + "-" + yesterday.getDate();
+  data.count = (data.last === yk) ? data.count + 1 : 1;
+  data.last = tk;
+  try { localStorage.setItem("fermiDaily_streak", JSON.stringify(data)); } catch (e) {}
+  renderStreak(data.count);
+}
+
+function renderStreak(n) {
+  document.getElementById("streakBox").textContent = "連続捜査 " + n + "日";
+}
+
+function saveHistory() {
+  var a = document.getElementById("answerInput").value.trim();
+  if (!a) { return; }
+  var hist = loadJSON("fermiDaily_history", []);
+  var entry = {
+    d: todayKey(),
+    no: fileNo,
+    q: QUESTIONS[currentIndex].q,
+    a: a
+  };
+  hist = hist.filter(function (h) { return !(h.d === entry.d && h.q === entry.q); });
+  hist.unshift(entry);
+  if (hist.length > 30) { hist = hist.slice(0, 30); }
+  try { localStorage.setItem("fermiDaily_history", JSON.stringify(hist)); } catch (e) {}
+  renderHistory();
+}
+
+function renderHistory() {
+  var hist = loadJSON("fermiDaily_history", []);
+  var box = document.getElementById("historyBox");
+  if (hist.length === 0) {
+    box.innerHTML = '<div class="h-item">まだ記録がありません。最初の事件を解決しましょう。</div>';
+    return;
+  }
+  var html = "";
+  var i;
+  for (i = 0; i < hist.length; i++) {
+    html += '<div class="h-item"><div class="h-date">' + esc(hist[i].d) + ' / File #' + pad3(hist[i].no) + '</div>'
+      + esc(hist[i].q) + '<br><span class="h-a">A. ' + esc(hist[i].a) + '</span></div>';
+  }
+  box.innerHTML = html;
+}
+
+function esc(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// ---- 捜査計算機 ----
+var lastCalcValue = null;
+var calcTokens = [];
+var varValues = {};
+var lastVarKey = "";
+
+function normalizeExpr(s) {
+  var zen = "0123456789";
+  var out = "";
+  var i;
+  for (i = 0; i < s.length; i++) {
+    var ch = s.charAt(i);
+    var z = zen.indexOf(ch);
+    if (z >= 0) { out += String(z); continue; }
+    if (ch === "×" || ch === "*") { out += "*"; continue; }
+    if (ch === "÷" || ch === "/") { out += "/"; continue; }
+    if (ch === "−" || ch === "-" || ch === "ー") { out += "-"; continue; }
+    if (ch === "+" || ch === "+") { out += "+"; continue; }
+    if (ch === "(" || ch === "(") { out += "("; continue; }
+    if (ch === ")" || ch === ")") { out += ")"; continue; }
+    if (ch === "." || ch === ".") { out += "."; continue; }
+    if (ch === "," || ch === "、" || ch === " " || ch === "\u3000") { continue; }
+    if (ch === "万") { out += "*10000"; continue; }
+    if (ch === "億") { out += "*100000000"; continue; }
+    if (ch === "%" || ch === "%") { out += "/100"; continue; }
+    out += ch;
+  }
+  return out;
+}
+
+function evalExpr(raw) {
+  var n = normalizeExpr(raw);
+  if (!n) { return null; }
+  if (!/^[0-9+\-*/().]+$/.test(n)) { return NaN; }
+  try {
+    var v = Function('"use strict"; return (' + n + ');')();
+    return (typeof v === "number" && isFinite(v)) ? v : NaN;
+  } catch (e) {
+    return NaN;
+  }
+}
+
+function roundSig(v, sig) {
+  if (v === 0) { return 0; }
+  var d = Math.ceil(Math.log(Math.abs(v)) / Math.LN10);
+  var p = Math.pow(10, sig - d);
+  return Math.round(v * p) / p;
+}
+
+function formatJP(v) {
+  var abs = Math.abs(v);
+  var s;
+  if (abs >= 100000000) {
+    s = String(roundSig(v / 100000000, 3)) + "億";
+  } else if (abs >= 10000) {
+    s = String(roundSig(v / 10000, 3)) + "万";
+  } else if (abs >= 100) {
+    s = String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  } else {
+    s = String(roundSig(v, 3));
+  }
+  return s;
+}
+
+function parseTemplate(s) {
+  var tokens = [];
+  var buf = "";
+  var i, ch, mapped, disp;
+  function flush() {
+    var t = buf.replace(/^\s+|\s+$/g, "");
+    buf = "";
+    if (!t) { return; }
+    if (/^[0-9\uFF10-\uFF19.,\uFF0E\u3001\uFF0C\u4E07\u5104%\uFF05\s]+$/.test(t)) {
+      tokens.push({ t: "num", v: t });
+    } else {
+      tokens.push({ t: "var", v: t });
+    }
+  }
+  for (i = 0; i < s.length; i++) {
+    ch = s.charAt(i);
+    mapped = null;
+    disp = "";
+    if (ch === "\u00D7" || ch === "*") { mapped = "*"; disp = "\u00D7"; }
+    else if (ch === "\u00F7" || ch === "/") { mapped = "/"; disp = "\u00F7"; }
+    else if (ch === "\u2212" || ch === "-") { mapped = "-"; disp = "\u2212"; }
+    else if (ch === "+" || ch === "\uFF0B") { mapped = "+"; disp = "+"; }
+    else if (ch === "(" || ch === "\uFF08") { mapped = "("; disp = "("; }
+    else if (ch === ")" || ch === "\uFF09") { mapped = ")"; disp = ")"; }
+    if (mapped) {
+      flush();
+      tokens.push({ t: "op", v: mapped, d: disp });
+    } else {
+      buf += ch;
+    }
+  }
+  flush();
+  return tokens;
+}
+
+function markLabels(tokens) {
+  var i;
+  for (i = 0; i < tokens.length; i++) {
+    if (tokens[i].t === "var" && tokens[i + 1] && tokens[i + 1].t === "op" && tokens[i + 1].v === "(") {
+      tokens[i].t = "label";
+    }
+  }
+  return tokens;
+}
+
+function varList() {
+  var seen = {};
+  var list = [];
+  var i;
+  for (i = 0; i < calcTokens.length; i++) {
+    if (calcTokens[i].t === "var" && !seen[calcTokens[i].v]) {
+      seen[calcTokens[i].v] = true;
+      list.push(calcTokens[i].v);
+    }
+  }
+  return list;
+}
+
+function renderVarInputs() {
+  var list = varList();
+  var key = list.join("|");
+  if (key === lastVarKey) { return; }
+  lastVarKey = key;
+  var box = document.getElementById("calcVars");
+  var html = "";
+  var i;
+  for (i = 0; i < list.length; i++) {
+    html += '<div class="var-row"><span class="var-name">' + esc(list[i]) + '</span>'
+      + '<input type="text" data-var="' + esc(list[i]) + '" placeholder="50件・8分・5.6万円 単位OK"></div>';
+  }
+  box.innerHTML = html;
+  var inputs = box.querySelectorAll("input");
+  for (i = 0; i < inputs.length; i++) {
+    if (varValues[inputs[i].getAttribute("data-var")]) {
+      inputs[i].value = varValues[inputs[i].getAttribute("data-var")];
+    }
+    inputs[i].addEventListener("input", function () {
+      varValues[this.getAttribute("data-var")] = this.value;
+      computeCalc();
+    });
+  }
+}
+
+// 「50件」「5.6万円」→ 計算用の数値部分だけ抜き出す(単位は表示用に残る)
+function valueParse(raw) {
+  if (!raw) { return null; }
+  var zen = "\uFF10\uFF11\uFF12\uFF13\uFF14\uFF15\uFF16\uFF17\uFF18\uFF19";
+  var t = "";
+  var i, ch, z;
+  for (i = 0; i < raw.length; i++) {
+    ch = raw.charAt(i);
+    z = zen.indexOf(ch);
+    t += (z >= 0) ? String(z) : ch;
+  }
+  t = t.replace(/[,\uFF0C\u3001\s\u3000]/g, "").replace(/\uFF0E/g, ".");
+  var m = t.match(/^-?[0-9]*\.?[0-9]+(\u4E07|\u5104)?(%|\uFF05)?/);
+  if (!m || !m[0]) { return null; }
+  return m[0];
+}
+
+function exprPiece(tk) {
+  if (tk.t === "op") { return tk.v; }
+  if (tk.t === "num") { return "(" + tk.v + ")"; }
+  if (tk.t === "label") { return ""; }
+  var nm = valueParse(varValues[tk.v]);
+  return (nm === null) ? null : "(" + nm + ")";
+}
+
+function memoPiece(tk) {
+  if (tk.t === "op") { return tk.d; }
+  if (tk.t === "num") { return tk.v; }
+  if (tk.t === "label") { return tk.v; }
+  return tk.v + (varValues[tk.v] || "?");
+}
+
+function computeCalc() {
+  var box = document.getElementById("calcResult");
+  if (calcTokens.length === 0) {
+    lastCalcValue = null;
+    box.className = "calc-result";
+    box.textContent = "= ";
+    renderSteps();
+    return;
+  }
+  var expr = "";
+  var missing = {};
+  var missingCount = 0;
+  var i, tk, piece;
+  for (i = 0; i < calcTokens.length; i++) {
+    tk = calcTokens[i];
+    piece = exprPiece(tk);
+    if (piece === null) {
+      if (!missing[tk.v]) { missing[tk.v] = true; missingCount++; }
+      expr += "(0)";
+    } else {
+      expr += piece;
+    }
+  }
+  renderSteps();
+  if (missingCount > 0) {
+    lastCalcValue = null;
+    box.className = "calc-result";
+    box.textContent = "= 数値待ち(あと" + missingCount + "項目)";
+    return;
+  }
+  var v = evalExpr(expr);
+  if (v === null || isNaN(v)) {
+    lastCalcValue = null;
+    box.className = "calc-result err";
+    box.textContent = "= 式を確認";
+    return;
+  }
+  lastCalcValue = v;
+  box.className = "calc-result";
+  box.innerHTML = "= " + esc(formatJP(v)) + '<span class="calc-raw">' + esc(String(v)) + "</span>";
+}
+
+// ()のグループを内側から順に拾う(直前がラベルなら名前付き)
+function findGroups(tokens) {
+  var groups = [];
+  var stack = [];
+  var i;
+  for (i = 0; i < tokens.length; i++) {
+    if (tokens[i].t === "op" && tokens[i].v === "(") {
+      stack.push({ start: i, label: (i > 0 && tokens[i - 1].t === "label") ? tokens[i - 1].v : null });
+    } else if (tokens[i].t === "op" && tokens[i].v === ")") {
+      var g = stack.pop();
+      if (g) { g.end = i; groups.push(g); }
+    }
+  }
+  return groups;
+}
+
+function renderSteps() {
+  var box = document.getElementById("calcSteps");
+  var groups = findGroups(calcTokens);
+  if (groups.length === 0) { box.innerHTML = ""; return; }
+  var html = "";
+  var gi, j, tk, piece, subExpr, subMemo, incomplete, v, valTxt, name;
+  for (gi = 0; gi < groups.length; gi++) {
+    subExpr = "";
+    subMemo = "";
+    incomplete = false;
+    for (j = groups[gi].start + 1; j < groups[gi].end; j++) {
+      tk = calcTokens[j];
+      piece = exprPiece(tk);
+      if (piece === null) { incomplete = true; subExpr += "(0)"; }
+      else { subExpr += piece; }
+      subMemo += memoPiece(tk);
+    }
+    if (incomplete) {
+      valTxt = "数値待ち";
+    } else {
+      v = evalExpr(subExpr);
+      valTxt = (v === null || isNaN(v)) ? "式を確認" : formatJP(v);
+    }
+    name = groups[gi].label ? groups[gi].label : "(" + subMemo + ")";
+    html += '<div class="step-line">' + esc(name) + ':' + esc(subMemo)
+      + ' = <span class="step-val">' + esc(valTxt) + "</span></div>";
+  }
+  box.innerHTML = html;
+}
+
+function updateCalc() {
+  calcTokens = markLabels(parseTemplate(document.getElementById("calcInput").value));
+  renderVarInputs();
+  computeCalc();
+}
+
+function buildMemoLine() {
+  var out = "";
+  var i;
+  for (i = 0; i < calcTokens.length; i++) {
+    out += memoPiece(calcTokens[i]);
+  }
+  return out;
+}
+
+function insertKey(k) {
+  var input = document.getElementById("calcInput");
+  input.value += k;
+  input.focus();
+  updateCalc();
+}
+
+function calcToAnswer() {
+  if (lastCalcValue === null) { showToast("先に式を入力"); return; }
+  document.getElementById("answerInput").value = "約" + formatJP(lastCalcValue);
+  updatePreview();
+  showToast("A.に転記しました");
+}
+
+function calcToLogic() {
+  if (lastCalcValue === null) { showToast("先に計算を完成させて"); return; }
+  var logic = document.getElementById("logicInput");
+  var line = buildMemoLine() + " \u2252 " + formatJP(lastCalcValue);
+  logic.value = logic.value ? (logic.value + "\n" + line) : line;
+  updatePreview();
+  showToast("分解メモに追記しました");
+}
+
+function init() {
+  var d = daysSinceEpoch();
+  fileNo = Math.max(1, d + 1);
+  todayIndex = pickIndexForDay(d);
+  var n = new Date();
+  document.getElementById("stampDate").textContent =
+    n.getFullYear() + "." + (n.getMonth() + 1) + "." + n.getDate();
+  document.getElementById("fileStamp").innerHTML =
+    "File #" + pad3(fileNo) + "<br>" + n.getFullYear() + "." + (n.getMonth() + 1) + "." + n.getDate();
+  showQuestion(todayIndex);
+  renderHistory();
+  var data = loadJSON("fermiDaily_streak", { last: "", count: 0 });
+  renderStreak(data.count);
+
+  document.getElementById("answerInput").addEventListener("input", updatePreview);
+  document.getElementById("logicInput").addEventListener("input", updatePreview);
+  document.getElementById("calcInput").addEventListener("input", updateCalc);
+  document.getElementById("btnToAnswer").addEventListener("click", calcToAnswer);
+  document.getElementById("btnToLogic").addEventListener("click", calcToLogic);
+  document.getElementById("keyClear").addEventListener("click", function () {
+    document.getElementById("calcInput").value = "";
+    updateCalc();
+    document.getElementById("calcInput").focus();
+  });
+  var keys = document.querySelectorAll(".calc-keys button[data-k]");
+  var k;
+  for (k = 0; k < keys.length; k++) {
+    keys[k].addEventListener("click", function () {
+      insertKey(this.getAttribute("data-k"));
+    });
+  }
+  document.getElementById("btnCopy").addEventListener("click", copyText);
+  document.getElementById("btnPost").addEventListener("click", postToX);
+  document.getElementById("btnAnother").addEventListener("click", function () {
+    var idx = Math.floor(Math.random() * QUESTIONS.length);
+    if (idx === currentIndex) { idx = (idx + 1) % QUESTIONS.length; }
+    showQuestion(idx);
+  });
+  document.getElementById("btnToday").addEventListener("click", function () {
+    showQuestion(todayIndex);
+  });
+}
+
+init();
+</script>
+</body>
+</html>
