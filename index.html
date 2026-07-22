@@ -180,6 +180,20 @@ input:focus, textarea:focus { outline: 2px solid var(--stamp); outline-offset: 1
 }
 .count { font-size: 12px; text-align: right; margin-top: 4px; }
 .count.over { color: var(--stamp); font-weight: 700; }
+.mode-row { display: flex; gap: 6px; }
+.mode-btn {
+  flex: 1;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  border-radius: 3px;
+  padding: 8px 2px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+}
+.mode-btn.active { background: var(--stamp); color: #fff; border-color: var(--stamp); font-weight: 700; }
 .btn-row { display: flex; gap: 10px; margin-top: 14px; }
 .btn {
   flex: 1;
@@ -279,6 +293,17 @@ footer { text-align: center; font-size: 11px; color: #6b6152; margin-top: 30px; 
     <label for="logicInput">分解メモ(推定の筋道)</label>
     <textarea id="logicInput" placeholder="例:50件×8分=400分 ÷ 稼働330分/人 ≒ 1.2人 → ピーク集中を見て…"></textarea>
     <div class="hint">処理能力 vs 需要の形で書くとボトルネックが伝わる</div>
+
+    <label for="assumeInput">キー前提(Bモードのツッコミどころ)</label>
+    <input type="text" id="assumeInput" placeholder="例:採用率20%と仮定 / 1件8分で計算">
+    <div class="hint">人によって違う数字を1つ晒すとリプが来やすい</div>
+
+    <label>投稿スタイル</label>
+    <div class="mode-row" id="modeRow">
+      <button type="button" class="mode-btn active" data-mode="reveal">A 答えを伏せる</button>
+      <button type="button" class="mode-btn" data-mode="assume">B 仮定にツッコミ</button>
+      <button type="button" class="mode-btn" data-mode="full">従来(答え込み)</button>
+    </div>
 
     <label>投稿プレビュー</label>
     <div class="preview" id="preview"></div>
@@ -400,21 +425,46 @@ function showQuestion(idx) {
   updatePreview();
 }
 
+var postMode = "reveal";
+
 function buildPost() {
   var a = document.getElementById("answerInput").value.trim();
   var logic = document.getElementById("logicInput").value.trim();
+  var assume = document.getElementById("assumeInput").value.trim();
+  var q = QUESTIONS[currentIndex].q;
   var lines = [];
-  lines.push("\uD83D\uDD0D フェルミ捜査 File #" + pad3(fileNo));
-  lines.push(QUESTIONS[currentIndex].q);
-  lines.push("");
-  lines.push("A. " + (a || "(結論を入力)"));
-  if (logic) {
+
+  if (postMode === "reveal") {
+    // A. 答えを伏せて問いかけで終わる
+    lines.push("\uD83D\uDD0D フェルミ捜査");
+    lines.push(q);
     lines.push("");
-    lines.push("【分解】");
-    lines.push(logic);
+    lines.push("みなさんの体感、どれくらいだと思いますか?");
+    lines.push("(正解と分解は明日の投稿で)");
+  } else if (postMode === "assume") {
+    // B. 仮定を晒してツッコミを誘う
+    lines.push(q);
+    lines.push("");
+    if (a) {
+      lines.push("ざっくり" + (assume ? "(" + assume + ")" : "") + "で " + a);
+    } else {
+      lines.push("(結論を入力)");
+    }
+    lines.push("");
+    lines.push("この前提、現場の肌感だと高め?低め?");
+    lines.push("実際の数字を教えてください");
+  } else {
+    // 従来型(答え込み)
+    lines.push("\uD83D\uDD0D フェルミ捜査 File #" + pad3(fileNo));
+    lines.push(q);
+    lines.push("");
+    lines.push("A. " + (a || "(結論を入力)"));
+    if (logic) {
+      lines.push("");
+      lines.push("【分解】");
+      lines.push(logic);
+    }
   }
-  lines.push("");
-  lines.push("#フェルミ推定 #データ探偵事務所");
   return lines.join("\n");
 }
 
@@ -872,6 +922,19 @@ function init() {
 
   document.getElementById("answerInput").addEventListener("input", updatePreview);
   document.getElementById("logicInput").addEventListener("input", updatePreview);
+  document.getElementById("assumeInput").addEventListener("input", updatePreview);
+  var modeBtns = document.querySelectorAll(".mode-btn");
+  var mb;
+  for (mb = 0; mb < modeBtns.length; mb++) {
+    modeBtns[mb].addEventListener("click", function () {
+      postMode = this.getAttribute("data-mode");
+      var all = document.querySelectorAll(".mode-btn");
+      var x;
+      for (x = 0; x < all.length; x++) { all[x].className = "mode-btn"; }
+      this.className = "mode-btn active";
+      updatePreview();
+    });
+  }
   document.getElementById("calcInput").addEventListener("input", updateCalc);
   document.getElementById("btnToAnswer").addEventListener("click", calcToAnswer);
   document.getElementById("btnToLogic").addEventListener("click", calcToLogic);
