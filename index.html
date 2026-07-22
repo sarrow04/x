@@ -284,7 +284,7 @@ footer { text-align: center; font-size: 11px; color: #6b6152; margin-top: 30px; 
     <div class="calc-steps" id="calcSteps"></div>
     <div class="btn-row calc-actions">
       <button class="btn" id="btnToAnswer" type="button">結果をA.に転記</button>
-      <button class="btn" id="btnToLogic" type="button">式ごと分解メモへ</button>
+      <button class="btn" id="btnToLogic" type="button">型を分解メモへ</button>
     </div>
 
     <label for="logicInput">分解の型(構造式)— 投稿の主役</label>
@@ -385,7 +385,49 @@ var QUESTIONS = [
   { c: "ボトルネック", q: "電話8件+メール20件が毎時来る窓口。1人で回るのは何時まで?" },
   { c: "ボトルネック", q: "駐車場10台・平均滞在40分の店。1日の最大来店組数は?" },
   { c: "ボトルネック", q: "検品1人(1件3分)に毎日200件届いたら、遅延が1週間分になるのは何日後?" },
-  { c: "ボトルネック", q: "会議室3室の会社。予約が取り合いになるのは社員何人を超えたとき?" }
+  { c: "ボトルネック", q: "会議室3室の会社。予約が取り合いになるのは社員何人を超えたとき?" },
+  // コスト・投資対効果
+  { c: "コスト・ROI", q: "月20時間の手作業を時給2千円で外注 vs 30万円のツール導入。元が取れるのは何ヶ月?" },
+  { c: "コスト・ROI", q: "1件の入力ミスの手戻りコストが3千円。ミスを月50→10件に減らすと年いくら浮く?" },
+  { c: "コスト・ROI", q: "紙保管の書庫を電子化。倉庫賃料を月5万削るのに、初期スキャン費は何ヶ月で回収?" },
+  { c: "コスト・ROI", q: "残業を月40時間削減。割増賃金ベースで、年間の人件費インパクトは?" },
+  { c: "コスト・ROI", q: "採用単価30万円の会社が離職率を5%下げたら、年間の採用費削減はいくら?" },
+  { c: "コスト・ROI", q: "問い合わせ1件の対応コストが500円。チャットボットで半減させると月いくら?" },
+  { c: "コスト・ROI", q: "月額3万円のSaaSが1人あたり日15分を節約。10人使えば投資対効果は何倍?" },
+  { c: "コスト・ROI", q: "会議1時間の人件費(参加10人分)は?この会議を30分に短縮すると年いくら?" },
+  // 割合・比率で捉える
+  { c: "割合・比率", q: "1日の業務時間のうち「探し物・確認待ち」が占める割合は?" },
+  { c: "割合・比率", q: "問い合わせの何割が同じ10種類の質問に集約されるか?" },
+  { c: "割合・比率", q: "メール処理に1日のうち何%の時間を使っているか?" },
+  { c: "割合・比率", q: "受注データのうち、手入力を自動化できる「定型フォーマット」の比率は?" },
+  { c: "割合・比率", q: "会議のうち「報告だけで意思決定がない」ものの割合は?" },
+  { c: "割合・比率", q: "エラーの8割を生んでいる「上位の原因」はいくつに絞れるか?" },
+  // 処理能力の限界(スループット)
+  { c: "処理能力", q: "1人のカスタマーサポートが品質を保てる同時対応チャット数の上限は?" },
+  { c: "処理能力", q: "面接官1人が1日にこなせる面接の上限件数(集中力込み)は?" },
+  { c: "処理能力", q: "経理1人が月次決算を締められる取引件数の上限は?" },
+  { c: "処理能力", q: "1台のサーバーが捌ける同時アクセス数の目安は?" },
+  { c: "処理能力", q: "倉庫作業者1人が1時間にピッキングできる商品数は?" },
+  { c: "処理能力", q: "1人の営業が本気で追える同時進行の商談数はいくつまで?" },
+  // 損益分岐・比較
+  { c: "損益分岐", q: "内製 vs 外注。自社でやるほうが安くなるのは月間何件から?" },
+  { c: "損益分岐", q: "パート2人 vs 自動化機器1台。台数が勝つのは稼働何時間から?" },
+  { c: "損益分岐", q: "定期便 vs 都度配送。まとめ発送が得になるのは何個以上から?" },
+  { c: "損益分岐", q: "サブスク vs 買い切り。買い切りが得になるのは何年使ったら?" },
+  { c: "損益分岐", q: "研修を内製 vs 外部講師。内製が安くなるのは受講者何人から?" },
+  { c: "損益分岐", q: "自社トラック vs 宅配業者。自社が得なのは1日何件配送から?" },
+  // 規模・総量の可視化
+  { c: "総量の可視化", q: "社員100人が1年間に会議で費やす総時間は、何人年分の労働?" },
+  { c: "総量の可視化", q: "全社で1年間に印刷する紙を積み上げると何メートル?" },
+  { c: "総量の可視化", q: "1年分の「探し物の時間」を全社で合計すると何日分?" },
+  { c: "総量の可視化", q: "毎日5分の朝礼、社員50人で1年続けると総工数は何時間?" },
+  { c: "総量の可視化", q: "問い合わせ対応の待ち時間、顧客全員分を足すと年間何時間?" },
+  { c: "総量の可視化", q: "全社員のパスワード入力、1年分を合計すると何時間?" },
+  // 時間で効いてくる(閾値・回収)
+  { c: "時間の効果", q: "毎日10分の自動化。仕込みに8時間かけて元が取れるのは何日後?" },
+  { c: "時間の効果", q: "1日1件ずつ滞留が増える窓口。対応不能になるのは何日後?" },
+  { c: "時間の効果", q: "習得に20時間かかるツール。毎日30分浮くなら回収は何日?" },
+  { c: "時間の効果", q: "月5%ずつ問い合わせが増える。今の人員で限界が来るのは何ヶ月後?" }
 ];
 
 var EPOCH = new Date(2026, 6, 18); // 2026-07-18 = File #001
@@ -763,6 +805,13 @@ function memoPiece(tk) {
   return tk.v + (varValues[tk.v] || "?");
 }
 
+// 型:名前と演算子だけ(数値は載せない)
+function typePiece(tk) {
+  if (tk.t === "op") { return tk.d; }
+  if (tk.t === "num") { return tk.v; }
+  return tk.v;
+}
+
 function computeCalc() {
   var box = document.getElementById("calcResult");
   if (calcTokens.length === 0) {
@@ -880,13 +929,22 @@ function calcToAnswer() {
   showToast("A.に転記しました");
 }
 
+function buildTypeLine() {
+  var out = "";
+  var i;
+  for (i = 0; i < calcTokens.length; i++) {
+    out += typePiece(calcTokens[i]);
+  }
+  return out;
+}
+
 function calcToLogic() {
-  if (lastCalcValue === null) { showToast("先に計算を完成させて"); return; }
+  if (calcTokens.length === 0) { showToast("先に式を組んで"); return; }
   var logic = document.getElementById("logicInput");
-  var line = buildMemoLine() + " \u2252 " + formatJP(lastCalcValue);
+  var line = buildTypeLine();
   logic.value = logic.value ? (logic.value + "\n" + line) : line;
   updatePreview();
-  showToast("分解メモに追記しました");
+  showToast("型を分解メモに追記しました");
 }
 
 function init() {
@@ -921,8 +979,15 @@ function init() {
   document.getElementById("btnToAnswer").addEventListener("click", calcToAnswer);
   document.getElementById("btnToLogic").addEventListener("click", calcToLogic);
   document.getElementById("keyClear").addEventListener("click", function () {
+    if (!confirm("入力を全部消します。よろしいですか?")) { return; }
     document.getElementById("calcInput").value = "";
+    document.getElementById("answerInput").value = "";
+    document.getElementById("logicInput").value = "";
+    varValues = {};
+    lastVarKey = "";
+    document.getElementById("calcVars").innerHTML = "";
     updateCalc();
+    updatePreview();
     document.getElementById("calcInput").focus();
   });
   var keys = document.querySelectorAll(".calc-keys button[data-k]");
