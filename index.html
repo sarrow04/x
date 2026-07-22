@@ -287,22 +287,17 @@ footer { text-align: center; font-size: 11px; color: #6b6152; margin-top: 30px; 
       <button class="btn" id="btnToLogic" type="button">式ごと分解メモへ</button>
     </div>
 
-    <label for="answerInput">A. 結論(概算値)</label>
-    <input type="text" id="answerInput" placeholder="例:7人(余裕率込みで8人)">
+    <label for="logicInput">分解の型(構造式)— 投稿の主役</label>
+    <textarea id="logicInput" placeholder="例:&#10;面接官の稼働 = 応募数 × 面接1件の時間&#10;応募数 = 採用数 ÷ 採用率"></textarea>
+    <div class="hint">= の形で分解を書くと、読んだ人が自分の数字を当てはめられる</div>
 
-    <label for="logicInput">分解メモ(推定の筋道)</label>
-    <textarea id="logicInput" placeholder="例:50件×8分=400分 ÷ 稼働330分/人 ≒ 1.2人 → ピーク集中を見て…"></textarea>
-    <div class="hint">処理能力 vs 需要の形で書くとボトルネックが伝わる</div>
-
-    <label for="assumeInput">キー前提(Bモードのツッコミどころ)</label>
-    <input type="text" id="assumeInput" placeholder="例:採用率20%と仮定 / 1件8分で計算">
-    <div class="hint">人によって違う数字を1つ晒すとリプが来やすい</div>
+    <label for="answerInput">A. 結論(任意・従来モード用)</label>
+    <input type="text" id="answerInput" placeholder="例:約150時間(空欄でもOK)">
 
     <label>投稿スタイル</label>
     <div class="mode-row" id="modeRow">
-      <button type="button" class="mode-btn active" data-mode="reveal">A 答えを伏せる</button>
-      <button type="button" class="mode-btn" data-mode="assume">B 仮定にツッコミ</button>
-      <button type="button" class="mode-btn" data-mode="full">従来(答え込み)</button>
+      <button type="button" class="mode-btn active" data-mode="type">型を配る</button>
+      <button type="button" class="mode-btn" data-mode="full">従来(答え込み・検証用)</button>
     </div>
 
     <label>投稿プレビュー</label>
@@ -425,36 +420,24 @@ function showQuestion(idx) {
   updatePreview();
 }
 
-var postMode = "reveal";
+var postMode = "type";
 
 function buildPost() {
   var a = document.getElementById("answerInput").value.trim();
   var logic = document.getElementById("logicInput").value.trim();
-  var assume = document.getElementById("assumeInput").value.trim();
   var q = QUESTIONS[currentIndex].q;
   var lines = [];
 
-  if (postMode === "reveal") {
-    // A. 答えを伏せて問いかけで終わる
+  if (postMode === "type") {
+    // 型を配る:答えは出さず、分解の構造だけ渡す
     lines.push("\uD83D\uDD0D フェルミ捜査");
     lines.push(q);
     lines.push("");
-    lines.push("みなさんの体感、どれくらいだと思いますか?");
-    lines.push("(正解と分解は明日の投稿で)");
-  } else if (postMode === "assume") {
-    // B. 仮定を晒してツッコミを誘う
-    lines.push(q);
+    lines.push(logic ? logic : "(分解の型を入力)");
     lines.push("");
-    if (a) {
-      lines.push("ざっくり" + (assume ? "(" + assume + ")" : "") + "で " + a);
-    } else {
-      lines.push("(結論を入力)");
-    }
-    lines.push("");
-    lines.push("この前提、現場の肌感だと高め?低め?");
-    lines.push("実際の数字を教えてください");
+    lines.push("数字は会社ごとに変わるので、当てはめてみてください");
   } else {
-    // 従来型(答え込み)
+    // 従来型(答え込み・検証用)
     lines.push("\uD83D\uDD0D フェルミ捜査 File #" + pad3(fileNo));
     lines.push(q);
     lines.push("");
@@ -922,7 +905,6 @@ function init() {
 
   document.getElementById("answerInput").addEventListener("input", updatePreview);
   document.getElementById("logicInput").addEventListener("input", updatePreview);
-  document.getElementById("assumeInput").addEventListener("input", updatePreview);
   var modeBtns = document.querySelectorAll(".mode-btn");
   var mb;
   for (mb = 0; mb < modeBtns.length; mb++) {
