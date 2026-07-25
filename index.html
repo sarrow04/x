@@ -272,6 +272,7 @@ footer { text-align: center; font-size: 11px; color: #6b6152; margin-top: 30px; 
     <input type="text" id="calcInput" placeholder="例:入電数×処理時間÷稼働時間">
     <div class="hint">「名前(式)」と書くと名前は注釈扱い。この形で「型を追加」すると 名前=式 の1行になる</div>
     <div class="calc-keys">
+      <button type="button" data-k=" = ">=</button>
       <button type="button" data-k="+">+</button>
       <button type="button" data-k="−">−</button>
       <button type="button" data-k="×">×</button>
@@ -743,9 +744,14 @@ function parseTemplate(s) {
     else if (ch === "+" || ch === "\uFF0B") { mapped = "+"; disp = "+"; }
     else if (ch === "(" || ch === "\uFF08") { mapped = "("; disp = "("; }
     else if (ch === ")" || ch === "\uFF09") { mapped = ")"; disp = ")"; }
+    else if (ch === "=" || ch === "\uFF1D") { mapped = "="; disp = "="; }
     if (mapped) {
       flush();
-      tokens.push({ t: "op", v: mapped, d: disp });
+      if (mapped === "=") {
+        tokens.push({ t: "eq", v: "=", d: "=" });
+      } else {
+        tokens.push({ t: "op", v: mapped, d: disp });
+      }
     } else {
       buf += ch;
     }
@@ -757,8 +763,16 @@ function parseTemplate(s) {
 function markLabels(tokens) {
   var i;
   for (i = 0; i < tokens.length; i++) {
+    // 名前( の名前はラベル
     if (tokens[i].t === "var" && tokens[i + 1] && tokens[i + 1].t === "op" && tokens[i + 1].v === "(") {
       tokens[i].t = "label";
+    }
+    // = の直前(左辺=結論)はラベル
+    if (tokens[i].t === "eq") {
+      var j = i - 1;
+      if (j >= 0 && (tokens[j].t === "var" || tokens[j].t === "num")) {
+        tokens[j].t = "label";
+      }
     }
   }
   return tokens;
@@ -823,6 +837,7 @@ function exprPiece(tk) {
   if (tk.t === "op") { return tk.v; }
   if (tk.t === "num") { return "(" + tk.v + ")"; }
   if (tk.t === "label") { return ""; }
+  if (tk.t === "eq") { return ""; }
   var nm = valueParse(varValues[tk.v]);
   return (nm === null) ? null : "(" + nm + ")";
 }
@@ -831,6 +846,7 @@ function memoPiece(tk) {
   if (tk.t === "op") { return tk.d; }
   if (tk.t === "num") { return tk.v; }
   if (tk.t === "label") { return tk.v; }
+  if (tk.t === "eq") { return " = "; }
   return tk.v + (varValues[tk.v] || "?");
 }
 
@@ -838,6 +854,7 @@ function memoPiece(tk) {
 function typePiece(tk) {
   if (tk.t === "op") { return tk.d; }
   if (tk.t === "num") { return tk.v; }
+  if (tk.t === "eq") { return " = "; }
   return tk.v;
 }
 
@@ -850,12 +867,28 @@ function computeCalc() {
     renderSteps();
     return;
   }
+  // = があれば右辺だけを計算対象にする(左辺は結論ラベル)
+  var eqIdx = -1;
+  var k;
+  for (k = 0; k < calcTokens.length; k++) {
+    if (calcTokens[k].t === "eq") { eqIdx = k; }
+  }
+  var rhs = (eqIdx >= 0) ? calcTokens.slice(eqIdx + 1) : calcTokens;
+  var leftLabel = "";
+  if (eqIdx >= 0) {
+    var p;
+    for (p = 0; p < eqIdx; p++) {
+      if (calcTokens[p].t === "label" || calcTokens[p].t === "var" || calcTokens[p].t === "num") {
+        leftLabel += calcTokens[p].v;
+      }
+    }
+  }
   var expr = "";
   var missing = {};
   var missingCount = 0;
   var i, tk, piece;
-  for (i = 0; i < calcTokens.length; i++) {
-    tk = calcTokens[i];
+  for (i = 0; i < rhs.length; i++) {
+    tk = rhs[i];
     piece = exprPiece(tk);
     if (piece === null) {
       if (!missing[tk.v]) { missing[tk.v] = true; missingCount++; }
@@ -865,6 +898,12 @@ function computeCalc() {
     }
   }
   renderSteps();
+  if (rhs.length === 0) {
+    lastCalcValue = null;
+    box.className = "calc-result";
+    box.textContent = "= 右辺を入力";
+    return;
+  }
   if (missingCount > 0) {
     lastCalcValue = null;
     box.className = "calc-result";
@@ -880,7 +919,8 @@ function computeCalc() {
   }
   lastCalcValue = v;
   box.className = "calc-result";
-  box.innerHTML = "= " + esc(formatJP(v)) + '<span class="calc-raw">' + esc(String(v)) + "</span>";
+  var prefix = leftLabel ? (esc(leftLabel) + " = ") : "= ";
+  box.innerHTML = prefix + esc(formatJP(v)) + '<span class="calc-raw">' + esc(String(v)) + "</span>";
 }
 
 // ()のグループを内側から順に拾う(直前がラベルなら名前付き)
