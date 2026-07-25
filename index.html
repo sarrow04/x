@@ -167,6 +167,27 @@ input:focus, textarea:focus { outline: 2px solid var(--stamp); outline-offset: 1
   word-break: break-all;
 }
 .step-line .step-val { color: var(--stamp); font-weight: 700; }
+.sens-head {
+  font-size: 13px;
+  font-weight: 700;
+  margin-top: 8px;
+  padding: 6px 8px;
+  background: var(--ink);
+  color: var(--card);
+  border-radius: 3px;
+}
+.sens-row { margin-top: 6px; font-size: 12px; }
+.sens-row .sens-name { display: inline-block; min-width: 110px; font-weight: 600; }
+.sens-bar {
+  display: inline-block;
+  height: 10px;
+  background: var(--stamp);
+  border-radius: 2px;
+  vertical-align: middle;
+  min-width: 2px;
+}
+.sens-row.top .sens-name { color: var(--stamp); }
+.sens-pct { font-family: "Courier New", monospace; margin-left: 6px; }
 .calc-actions { margin-top: 8px; }
 .calc-actions .btn { padding: 9px 0; font-size: 13px; background: none; border: 1px solid var(--ink); color: var(--ink); }
 .preview {
@@ -290,6 +311,10 @@ footer { text-align: center; font-size: 11px; color: #6b6152; margin-top: 30px; 
     <div class="calc-result" id="calcResult">= </div>
     <div class="calc-steps" id="calcSteps"></div>
     <div class="btn-row calc-actions">
+      <button class="btn" id="btnSensitivity" type="button">ボトルネック捜査</button>
+    </div>
+    <div id="sensBox"></div>
+    <div class="btn-row calc-actions">
       <button class="btn" id="btnToAnswer" type="button">結果をA.に転記</button>
       <button class="btn" id="btnToLogic" type="button">型を追加</button>
     </div>
@@ -303,7 +328,7 @@ footer { text-align: center; font-size: 11px; color: #6b6152; margin-top: 30px; 
 
     <label>投稿スタイル</label>
     <div class="mode-row" id="modeRow">
-      <button type="button" class="mode-btn active" data-mode="type">型を配る</button>
+      <button type="button" class="mode-btn active" data-mode="type">数字+型を配る</button>
       <button type="button" class="mode-btn" data-mode="full">従来(答え込み・検証用)</button>
     </div>
 
@@ -426,13 +451,21 @@ function buildPost() {
   var lines = [];
 
   if (postMode === "type") {
-    // 型を配る:答えは出さず、分解の構造だけ渡す
+    // 数字入りの分解を配る:名前+数字が並ぶので型と数字が同時に伝わる
     lines.push("\uD83D\uDD0D フェルミ捜査");
     lines.push(q);
     lines.push("");
-    lines.push(logic ? logic : "(分解の型を入力)");
-    lines.push("");
-    lines.push("数字は会社ごとに変わるので、当てはめてみてください");
+    var nums = buildNumberLines();
+    if (nums.length > 0) {
+      var i;
+      for (i = 0; i < nums.length; i++) { lines.push(nums[i]); }
+      lines.push("");
+      lines.push("自社の数字に置き換えれば、そのまま使えます");
+    } else {
+      lines.push(logic ? logic : "(計算機で式を組んで数値を入れてください)");
+      lines.push("");
+      lines.push("数字は会社ごとに変わるので、当てはめてみてください");
+    }
   } else {
     // 従来型(答え込み・検証用)
     lines.push("\uD83D\uDD0D フェルミ捜査 File #" + pad3(fileNo));
@@ -448,9 +481,138 @@ function buildPost() {
   return lines.join("\n");
 }
 
+// 計算機の各行を「左辺 = 名前数字 × 名前数字 = 結果」の形で返す
+function buildNumberLines() {
+  var out = [];
+  if (typeof calcLines === "undefined" || calcLines.length === 0) { return out; }
+  var resolved = resolveLines();
+  var li, sp, memo, r, v, i;
+  for (li = 0; li < calcLines.length; li++) {
+    sp = splitLine(calcLines[li].tokens);
+    if (sp.rhs.length === 0) { continue; }
+    r = rhsToExpr(sp.rhs, resolved);
+    if (r.missing > 0) { continue; }
+    v = evalExpr(r.expr);
+    if (v === null || isNaN(v)) { continue; }
+    memo = "";
+    for (i = 0; i < sp.rhs.length; i++) { memo += memoPieceResolved(sp.rhs[i], resolved); }
+    out.push((sp.label || "結論") + " = " + memo + " = " + formatJP(v));
+  }
+  return out;
+}
+
+// ---- ボトルネック捜査(感度分析)----
+// 他の行から参照されていない左辺(=最終結論)の行を探す
+function rootLineIndex() {
+  if (calcLines.length === 0) { return -1; }
+  var used = {};
+  var li, i, sp;
+  for (li = 0; li < calcLines.length; li++) {
+    sp = splitLine(calcLines[li].tokens);
+    for (i = 0; i < sp.rhs.length; i++) {
+      if (sp.rhs[i].t === "var") { used[sp.rhs[i].v] = true; }
+    }
+  }
+  for (li = 0; li < calcLines.length; li++) {
+    sp = splitLine(calcLines[li].tokens);
+    if (sp.label && !used[sp.label] && sp.rhs.length > 0) { return li; }
+  }
+  return calcLines.length - 1;
+}
+
+// 最終行の値を求める。values を渡すとその値セットで計算
+function finalValue(values) {
+  var saved = varValues;
+  if (values) { varValues = values; }
+  var result = null;
+  try {
+    var idx = rootLineIndex();
+    if (idx >= 0) {
+      var resolved = resolveLines();
+      var root = splitLine(calcLines[idx].tokens);
+      if (root.rhs.length > 0) {
+        var r = rhsToExpr(root.rhs, resolved);
+        if (r.missing === 0) {
+          var v = evalExpr(r.expr);
+          if (v !== null && !isNaN(v)) { result = v; }
+        }
+      }
+    }
+  } catch (e) { result = null; }
+  varValues = saved;
+  return result;
+}
+
+// 各因数を10%改善したとき、最終結果が何%動くかを比較
+function runSensitivity() {
+  var box = document.getElementById("sensBox");
+  var base = finalValue(null);
+  if (base === null || base === 0) {
+    box.innerHTML = '<div class="sens-head">先に式を組んで、数値を全部入れてください</div>';
+    return;
+  }
+  var list = varList();
+  if (list.length === 0) {
+    box.innerHTML = '<div class="sens-head">因数がありません</div>';
+    return;
+  }
+  var rows = [];
+  var i;
+  for (i = 0; i < list.length; i++) {
+    var name = list[i];
+    var numStr = valueParse(varValues[name]);
+    if (numStr === null) { continue; }
+    var baseNum = evalExpr(numStr);
+    if (baseNum === null || isNaN(baseNum) || baseNum === 0) { continue; }
+    // 10%増やした場合
+    var mod = {};
+    var key;
+    for (key in varValues) {
+      if (Object.prototype.hasOwnProperty.call(varValues, key)) { mod[key] = varValues[key]; }
+    }
+    mod[name] = String(baseNum * 1.1);
+    var newVal = finalValue(mod);
+    if (newVal === null) { continue; }
+    var pct = ((newVal - base) / base) * 100;
+    rows.push({ name: name, pct: pct, abs: Math.abs(pct) });
+  }
+  if (rows.length === 0) {
+    box.innerHTML = '<div class="sens-head">数値を入れると効き目を比較できます</div>';
+    return;
+  }
+  rows.sort(function (a, b) { return b.abs - a.abs; });
+  var max = rows[0].abs || 1;
+  var html = '<div class="sens-head">効くのは「' + esc(rows[0].name) + '」'
+    + '(10%動かすと結果が' + rows[0].pct.toFixed(1) + '%変わる)</div>';
+  var j;
+  for (j = 0; j < rows.length; j++) {
+    var w = Math.round((rows[j].abs / max) * 130);
+    html += '<div class="sens-row' + (j === 0 ? " top" : "") + '">'
+      + '<span class="sens-name">' + esc(rows[j].name) + "</span>"
+      + '<span class="sens-bar" style="width:' + w + 'px"></span>'
+      + '<span class="sens-pct">' + (rows[j].pct >= 0 ? "+" : "") + rows[j].pct.toFixed(1) + "%</span>"
+      + "</div>";
+  }
+  html += '<div class="hint">各因数を10%動かしたときの最終結果への影響。上ほど効くレバー(=ボトルネック)</div>';
+  box.innerHTML = html;
+}
+
+// memoPiece の解決版:他行で算出された値も名前の後ろに出す
+function memoPieceResolved(tk, resolved) {
+  if (tk.t === "op") { return tk.d; }
+  if (tk.t === "num") { return tk.v; }
+  if (tk.t === "label") { return tk.v; }
+  if (tk.t === "eq") { return " = "; }
+  if (varValues[tk.v]) { return tk.v + varValues[tk.v]; }
+  if (resolved && typeof resolved[tk.v] === "number") { return tk.v + formatJP(resolved[tk.v]); }
+  return tk.v;
+}
+
 // 因数分解チェック:型モードでは各行が「左辺 = 右辺」でないと投稿を止める
 function checkFactorization() {
   if (postMode !== "type") { return { ok: true }; }
+  // 計算機から数字入りの分解が作れていればOK
+  if (buildNumberLines().length > 0) { return { ok: true }; }
   var logic = document.getElementById("logicInput").value;
   var rawLines = logic.split("\n");
   var lines = [];
@@ -459,7 +621,7 @@ function checkFactorization() {
     if (rawLines[i].replace(/[\s\u3000]/g, "") !== "") { lines.push(rawLines[i]); }
   }
   if (lines.length === 0) {
-    return { ok: false, msg: "分解の型が空です。「結論 = A × B」の形で入力してください" };
+    return { ok: false, msg: "計算機で式を組んで数値を入れてください(または分解メモに 結論 = A × B)" };
   }
   for (i = 0; i < lines.length; i++) {
     ln = lines[i];
@@ -819,6 +981,7 @@ function renderVarInputs() {
     inputs[i].addEventListener("input", function () {
       varValues[this.getAttribute("data-var")] = this.value;
       computeCalc();
+      updatePreview();
     });
   }
 }
@@ -916,7 +1079,7 @@ function computeCalc() {
   renderSteps();
   // 最終行(または唯一の行)の結果を大きく表示
   var resolved = resolveLines();
-  var last = splitLine(calcLines[calcLines.length - 1].tokens);
+  var last = splitLine(calcLines[Math.max(0, rootLineIndex())].tokens);
   if (last.rhs.length === 0) {
     lastCalcValue = null;
     box.className = "calc-result";
@@ -1012,6 +1175,7 @@ function updateCalc() {
   calcTokens = calcLines.length ? calcLines[0].tokens : [];
   renderVarInputs();
   computeCalc();
+  updatePreview();
 }
 
 // 入力を行に分割してトークン化。2つ目以降の「名前 =」は自動で改行扱い
@@ -1237,6 +1401,7 @@ function init() {
   document.getElementById("calcInput").addEventListener("input", updateCalc);
   document.getElementById("btnToAnswer").addEventListener("click", calcToAnswer);
   document.getElementById("btnToLogic").addEventListener("click", calcToLogic);
+  document.getElementById("btnSensitivity").addEventListener("click", runSensitivity);
   document.getElementById("keyClear").addEventListener("click", function () {
     if (!confirm("入力を全部消します。よろしいですか?")) { return; }
     document.getElementById("calcInput").value = "";
@@ -1256,8 +1421,7 @@ function init() {
       insertKey(this.getAttribute("data-k"));
     });
   }
-  document.getElementById("btnCopy").addEventListener("click", copyText);
-  document.getElementById("btnPost").addEventListener("click", postToX);
+  document.getElementById("btnCopy").addEventListener("click", copyText);  document.getElementById("btnPost").addEventListener("click", postToX);
   document.getElementById("btnAnother").addEventListener("click", function () {
     var idx = Math.floor(Math.random() * QUESTIONS.length);
     if (idx === currentIndex) { idx = (idx + 1) % QUESTIONS.length; }
