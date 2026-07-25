@@ -180,6 +180,10 @@ input:focus, textarea:focus { outline: 2px solid var(--stamp); outline-offset: 1
 }
 .count { font-size: 12px; text-align: right; margin-top: 4px; }
 .count.over { color: var(--stamp); font-weight: 700; }
+.fact-check { font-size: 12px; margin-top: 4px; min-height: 16px; line-height: 1.4; }
+.fact-check.ok { color: #3a7d44; font-weight: 600; }
+.fact-check.ng { color: var(--stamp); font-weight: 600; }
+textarea.flash-err { outline: 2px solid var(--stamp); background: #FBEDE9; }
 .mode-row { display: flex; gap: 6px; }
 .mode-btn {
   flex: 1;
@@ -266,7 +270,7 @@ footer { text-align: center; font-size: 11px; color: #6b6152; margin-top: 30px; 
 
     <label for="calcInput">捜査計算機 — まず式を言葉で組む</label>
     <input type="text" id="calcInput" placeholder="例:入電数×処理時間÷稼働時間">
-    <div class="hint">「名前(式)」と書くと名前は注釈扱い:1時間の入電件数(総入電÷営業時間)×人数</div>
+    <div class="hint">「名前(式)」と書くと名前は注釈扱い。この形で「型を追加」すると 名前=式 の1行になる</div>
     <div class="calc-keys">
       <button type="button" data-k="+">+</button>
       <button type="button" data-k="−">−</button>
@@ -284,12 +288,22 @@ footer { text-align: center; font-size: 11px; color: #6b6152; margin-top: 30px; 
     <div class="calc-steps" id="calcSteps"></div>
     <div class="btn-row calc-actions">
       <button class="btn" id="btnToAnswer" type="button">結果をA.に転記</button>
-      <button class="btn" id="btnToLogic" type="button">型を分解メモへ</button>
+      <button class="btn" id="btnToLogic" type="button">型を追加</button>
     </div>
 
     <label for="logicInput">分解の型(構造式)— 投稿の主役</label>
     <textarea id="logicInput" placeholder="例:&#10;面接官の稼働 = 応募数 × 面接1件の時間&#10;応募数 = 採用数 ÷ 採用率"></textarea>
-    <div class="hint">= の形で分解を書くと、読んだ人が自分の数字を当てはめられる</div>
+    <div class="calc-keys" id="logicKeys">
+      <button type="button" data-lk=" = ">=</button>
+      <button type="button" data-lk=" × ">×</button>
+      <button type="button" data-lk=" ÷ ">÷</button>
+      <button type="button" data-lk=" + ">+</button>
+      <button type="button" data-lk=" − ">−</button>
+      <button type="button" data-lk="(">(</button>
+      <button type="button" data-lk=")">)</button>
+      <button type="button" data-lk="\n">改行</button>
+    </div>
+    <div class="hint">各行を「結論 = A × B ÷ C」の因数分解の形で。= がない行は投稿できません</div>
 
     <label for="answerInput">A. 結論(任意・従来モード用)</label>
     <input type="text" id="answerInput" placeholder="例:約150時間(空欄でもOK)">
@@ -303,6 +317,7 @@ footer { text-align: center; font-size: 11px; color: #6b6152; margin-top: 30px; 
     <label>投稿プレビュー</label>
     <div class="preview" id="preview"></div>
     <div class="count" id="countBox">0 / 280</div>
+    <div class="fact-check" id="factCheck"></div>
 
     <div class="btn-row">
       <button class="btn btn-copy" id="btnCopy" type="button">コピー</button>
@@ -440,6 +455,50 @@ function buildPost() {
   return lines.join("\n");
 }
 
+// 因数分解チェック:型モードでは各行が「左辺 = 右辺」でないと投稿を止める
+function checkFactorization() {
+  if (postMode !== "type") { return { ok: true }; }
+  var logic = document.getElementById("logicInput").value;
+  var rawLines = logic.split("\n");
+  var lines = [];
+  var i, ln;
+  for (i = 0; i < rawLines.length; i++) {
+    if (rawLines[i].replace(/[\s\u3000]/g, "") !== "") { lines.push(rawLines[i]); }
+  }
+  if (lines.length === 0) {
+    return { ok: false, msg: "分解の型が空です。「結論 = A × B」の形で入力してください" };
+  }
+  for (i = 0; i < lines.length; i++) {
+    ln = lines[i];
+    var eqCount = (ln.match(/[=\uFF1D]/g) || []).length;
+    if (eqCount === 0) {
+      return { ok: false, msg: "「= がない行があります → " + trimLabel(ln) + "」。因数分解は 左辺 = 右辺 の形で" };
+    }
+    if (eqCount > 1) {
+      return { ok: false, msg: "「= が多すぎる行があります → " + trimLabel(ln) + "」。1行に = は1つ" };
+    }
+    var parts = ln.split(/[=\uFF1D]/);
+    var left = parts[0].replace(/[\s\u3000]/g, "");
+    var right = parts[1].replace(/[\s\u3000]/g, "");
+    if (!left) {
+      return { ok: false, msg: "左辺(結論)が空の行があります → " + trimLabel(ln) };
+    }
+    if (!right) {
+      return { ok: false, msg: "右辺(因数)が空の行があります → " + trimLabel(ln) };
+    }
+    // 右辺に因数分解らしさ(演算子)があるか — 単項でも許容するが掛け算等を推奨
+    if (!/[×÷*\/\+\u2212\-]/.test(right) && lines.length === 1) {
+      return { ok: false, msg: "右辺を因数に分けてください → " + trimLabel(ln) + "(例: = A × B)" };
+    }
+  }
+  return { ok: true };
+}
+
+function trimLabel(s) {
+  s = s.replace(/^[\s\u3000]+|[\s\u3000]+$/g, "");
+  return (s.length > 14) ? s.slice(0, 14) + "…" : s;
+}
+
 // X加重文字数(全角2・半角1、上限280)
 function weightedLength(str) {
   var total = 0;
@@ -463,6 +522,18 @@ function updatePreview() {
   var box = document.getElementById("countBox");
   box.textContent = len + " / 280";
   box.className = (len > 280) ? "count over" : "count";
+  var chk = checkFactorization();
+  var fb = document.getElementById("factCheck");
+  if (postMode !== "type") {
+    fb.textContent = "";
+    fb.className = "fact-check";
+  } else if (chk.ok) {
+    fb.textContent = "✓ 因数分解OK(左辺 = 右辺の形)";
+    fb.className = "fact-check ok";
+  } else {
+    fb.textContent = "⚠ " + chk.msg;
+    fb.className = "fact-check ng";
+  }
 }
 
 function pad3(n) {
@@ -472,6 +543,8 @@ function pad3(n) {
 }
 
 function copyText() {
+  var chk = checkFactorization();
+  if (!chk.ok) { showToast(chk.msg); flashLogic(); return; }
   var text = buildPost();
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).then(function () {
@@ -493,10 +566,19 @@ function fallbackCopy(text) {
 }
 
 function postToX() {
+  var chk = checkFactorization();
+  if (!chk.ok) { showToast(chk.msg); flashLogic(); return; }
   var text = buildPost();
   var url = "https://twitter.com/intent/tweet?text=" + encodeURIComponent(text);
   afterAction("Xを開きます");
   window.open(url, "_blank");
+}
+
+function flashLogic() {
+  var el = document.getElementById("logicInput");
+  el.classList.add("flash-err");
+  setTimeout(function () { el.classList.remove("flash-err"); }, 1200);
+  el.focus();
 }
 
 function afterAction(msg) {
@@ -869,6 +951,18 @@ function insertKey(k) {
   updateCalc();
 }
 
+// 分解メモにカーソル位置で文字を挿入
+function insertIntoLogic(str) {
+  var el = document.getElementById("logicInput");
+  var start = (typeof el.selectionStart === "number") ? el.selectionStart : el.value.length;
+  var end = (typeof el.selectionEnd === "number") ? el.selectionEnd : el.value.length;
+  el.value = el.value.slice(0, start) + str + el.value.slice(end);
+  var pos = start + str.length;
+  el.focus();
+  try { el.setSelectionRange(pos, pos); } catch (e) {}
+  updatePreview();
+}
+
 function calcToAnswer() {
   if (lastCalcValue === null) { showToast("先に式を入力"); return; }
   document.getElementById("answerInput").value = "約" + formatJP(lastCalcValue);
@@ -888,10 +982,50 @@ function buildTypeLine() {
 function calcToLogic() {
   if (calcTokens.length === 0) { showToast("先に式を組んで"); return; }
   var logic = document.getElementById("logicInput");
-  var line = buildTypeLine();
+  var line = buildFactorLine();
+
+  var existing = logic.value.split("\n");
+  var i;
+  for (i = 0; i < existing.length; i++) {
+    if (existing[i].replace(/[\s\u3000]/g, "") === line.replace(/[\s\u3000]/g, "")) {
+      showToast("同じ型がすでにあります");
+      flashLogic();
+      return;
+    }
+  }
+  logic.value = logic.value.replace(/[\s\u3000]+$/, "");
   logic.value = logic.value ? (logic.value + "\n" + line) : line;
   updatePreview();
-  showToast("型を分解メモに追記しました");
+  showToast("型を追記しました(" + logic.value.split("\n").length + "行目)");
+}
+
+// 計算機の式を「左辺 = 右辺」の1行に整形
+function buildFactorLine() {
+  // パターン: 全体が「名前(式)」= 先頭がラベルで直後が(、末尾が)
+  var n = calcTokens.length;
+  if (n >= 3 && calcTokens[0].t === "label" && calcTokens[1].t === "op"
+      && calcTokens[1].v === "(" && calcTokens[n - 1].t === "op" && calcTokens[n - 1].v === ")") {
+    // 括弧の対応を確認(先頭の( が末尾の ) と対応しているか)
+    var depth = 0;
+    var matched = true;
+    var i;
+    for (i = 1; i < n; i++) {
+      if (calcTokens[i].t === "op" && calcTokens[i].v === "(") { depth++; }
+      else if (calcTokens[i].t === "op" && calcTokens[i].v === ")") {
+        depth--;
+        if (depth === 0 && i !== n - 1) { matched = false; break; }
+      }
+    }
+    if (matched) {
+      var inner = "";
+      for (i = 2; i < n - 1; i++) { inner += typePiece(calcTokens[i]); }
+      return calcTokens[0].v + " = " + inner;
+    }
+  }
+  // それ以外は右辺として扱い、左辺は編集用プレースホルダ
+  var right = buildTypeLine();
+  if (/[=\uFF1D]/.test(right)) { return right; }
+  return "結論 = " + right;
 }
 
 function init() {
@@ -942,6 +1076,15 @@ function init() {
   for (k = 0; k < keys.length; k++) {
     keys[k].addEventListener("click", function () {
       insertKey(this.getAttribute("data-k"));
+    });
+  }
+  var lkeys = document.querySelectorAll("#logicKeys button[data-lk]");
+  var lk;
+  for (lk = 0; lk < lkeys.length; lk++) {
+    lkeys[lk].addEventListener("click", function () {
+      var s = this.getAttribute("data-lk");
+      if (s === "\\n") { s = "\n"; }
+      insertIntoLogic(s);
     });
   }
   document.getElementById("btnCopy").addEventListener("click", copyText);
