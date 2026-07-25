@@ -167,6 +167,23 @@ input:focus, textarea:focus { outline: 2px solid var(--stamp); outline-offset: 1
   word-break: break-all;
 }
 .step-line .step-val { color: var(--stamp); font-weight: 700; }
+.steps-label {
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  font-weight: 700;
+  color: #6b6152;
+  margin-top: 10px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 2px;
+}
+.steps-label.concl-label { color: var(--stamp); border-bottom-color: var(--stamp); }
+.step-line.concl {
+  border-left-width: 4px;
+  border-left-color: var(--stamp);
+  background: #FBF0EC;
+  font-size: 13px;
+  font-weight: 600;
+}
 .sens-head {
   font-size: 13px;
   font-weight: 700;
@@ -457,8 +474,17 @@ function buildPost() {
     lines.push("");
     var nums = buildNumberLines();
     if (nums.length > 0) {
+      var parts = buildNumberParts();
       var i;
-      for (i = 0; i < nums.length; i++) { lines.push(nums[i]); }
+      if (parts.mid.length > 0) {
+        lines.push("【途中式】");
+        for (i = 0; i < parts.mid.length; i++) { lines.push(parts.mid[i]); }
+        lines.push("");
+      }
+      if (parts.concl.length > 0) {
+        lines.push("【結論】");
+        for (i = 0; i < parts.concl.length; i++) { lines.push(parts.concl[i]); }
+      }
       lines.push("");
       lines.push("自社の数字に置き換えれば、そのまま使えます");
     } else {
@@ -483,9 +509,19 @@ function buildPost() {
 
 // 計算機の各行を「左辺 = 名前数字 × 名前数字 = 結果」の形で返す
 function buildNumberLines() {
-  var out = [];
-  if (typeof calcLines === "undefined" || calcLines.length === 0) { return out; }
+  var r = buildNumberParts();
+  return r.mid.concat(r.concl);
+}
+
+// 途中式と結論を分けて返す
+function buildNumberParts() {
+  var mid = [];
+  var concl = [];
+  if (typeof calcLines === "undefined" || calcLines.length === 0) {
+    return { mid: mid, concl: concl };
+  }
   var resolved = resolveLines();
+  var rootIdx = rootLineIndex();
   var li, sp, memo, r, v, i;
   for (li = 0; li < calcLines.length; li++) {
     sp = splitLine(calcLines[li].tokens);
@@ -496,9 +532,10 @@ function buildNumberLines() {
     if (v === null || isNaN(v)) { continue; }
     memo = "";
     for (i = 0; i < sp.rhs.length; i++) { memo += memoPieceResolved(sp.rhs[i], resolved); }
-    out.push((sp.label || "結論") + " = " + memo + " = " + formatJP(v));
+    var line = (sp.label || "結論") + " = " + memo + " = " + formatJP(v);
+    if (li === rootIdx) { concl.push(line); } else { mid.push(line); }
   }
-  return out;
+  return { mid: mid, concl: concl };
 }
 
 // ---- ボトルネック捜査(感度分析)----
@@ -513,10 +550,14 @@ function rootLineIndex() {
       if (sp.rhs[i].t === "var") { used[sp.rhs[i].v] = true; }
     }
   }
+  // 参照されていない左辺の候補を集める
+  var candidates = [];
   for (li = 0; li < calcLines.length; li++) {
     sp = splitLine(calcLines[li].tokens);
-    if (sp.label && !used[sp.label] && sp.rhs.length > 0) { return li; }
+    if (sp.label && !used[sp.label] && sp.rhs.length > 0) { candidates.push(li); }
   }
+  // 候補が複数(=行同士が参照し合っていない書き方)なら、最後に書いた行を結論とみなす
+  if (candidates.length > 0) { return candidates[candidates.length - 1]; }
   return calcLines.length - 1;
 }
 
@@ -1146,14 +1187,15 @@ function renderSteps() {
   var box = document.getElementById("calcSteps");
   if (calcLines.length === 0) { box.innerHTML = ""; return; }
   var resolved = resolveLines();
-  var html = "";
+  var rootIdx = rootLineIndex();
+  var mid = "";
+  var concl = "";
   var li, sp, memo, r, v, valTxt, i;
   for (li = 0; li < calcLines.length; li++) {
     sp = splitLine(calcLines[li].tokens);
-    // 右辺のメモ表記(名前と数値)
-    memo = "";
-    for (i = 0; i < sp.rhs.length; i++) { memo += memoPiece(sp.rhs[i]); }
     if (sp.rhs.length === 0) { continue; }
+    memo = "";
+    for (i = 0; i < sp.rhs.length; i++) { memo += memoPieceResolved(sp.rhs[i], resolved); }
     r = rhsToExpr(sp.rhs, resolved);
     if (r.missing > 0) {
       valTxt = "数値待ち";
@@ -1162,9 +1204,14 @@ function renderSteps() {
       valTxt = (v === null || isNaN(v)) ? "式を確認" : formatJP(v);
     }
     var name = sp.label ? sp.label : "(結論)";
-    html += '<div class="step-line"><span class="step-val">' + esc(name) + "</span> = "
+    var row = '<div class="step-line' + (li === rootIdx ? " concl" : "") + '">'
+      + '<span class="step-val">' + esc(name) + "</span> = "
       + esc(memo) + ' = <span class="step-val">' + esc(valTxt) + "</span></div>";
+    if (li === rootIdx) { concl += row; } else { mid += row; }
   }
+  var html = "";
+  if (mid) { html += '<div class="steps-label">途中式</div>' + mid; }
+  if (concl) { html += '<div class="steps-label concl-label">結論</div>' + concl; }
   box.innerHTML = html;
 }
 
