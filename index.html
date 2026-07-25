@@ -117,6 +117,7 @@ input[type="text"], textarea {
   color: var(--ink);
 }
 textarea { min-height: 90px; resize: vertical; }
+textarea.calc-input { min-height: 52px; }
 input:focus, textarea:focus { outline: 2px solid var(--stamp); outline-offset: 1px; }
 .hint { font-size: 11px; color: #6b6152; margin-top: 3px; }
 .calc-keys { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
@@ -269,8 +270,8 @@ footer { text-align: center; font-size: 11px; color: #6b6152; margin-top: 30px; 
     </div>
 
     <label for="calcInput">捜査計算機 — まず式を言葉で組む</label>
-    <input type="text" id="calcInput" placeholder="例:入電数×処理時間÷稼働時間">
-    <div class="hint">「名前(式)」と書くと名前は注釈扱い。この形で「型を追加」すると 名前=式 の1行になる</div>
+    <textarea id="calcInput" class="calc-input" placeholder="例:&#10;売上 = 客数 × 客単価&#10;客数 = 新規 + リピート"></textarea>
+    <div class="hint">「= 」で 結論=因数×因数。2つ目の「名前 =」や改行キーで複数行に分けられます</div>
     <div class="calc-keys">
       <button type="button" data-k=" = ">=</button>
       <button type="button" data-k="+">+</button>
@@ -282,6 +283,7 @@ footer { text-align: center; font-size: 11px; color: #6b6152; margin-top: 30px; 
       <button type="button" data-k="万">万</button>
       <button type="button" data-k="億">億</button>
       <button type="button" data-k="%">%</button>
+      <button type="button" data-k="\n">改行</button>
       <button type="button" class="key-clear" id="keyClear">C</button>
     </div>
     <div id="calcVars"></div>
@@ -293,18 +295,8 @@ footer { text-align: center; font-size: 11px; color: #6b6152; margin-top: 30px; 
     </div>
 
     <label for="logicInput">分解の型(構造式)— 投稿の主役</label>
-    <textarea id="logicInput" placeholder="例:&#10;面接官の稼働 = 応募数 × 面接1件の時間&#10;応募数 = 採用数 ÷ 採用率"></textarea>
-    <div class="calc-keys" id="logicKeys">
-      <button type="button" data-lk=" = ">=</button>
-      <button type="button" data-lk=" × ">×</button>
-      <button type="button" data-lk=" ÷ ">÷</button>
-      <button type="button" data-lk=" + ">+</button>
-      <button type="button" data-lk=" − ">−</button>
-      <button type="button" data-lk="(">(</button>
-      <button type="button" data-lk=")">)</button>
-      <button type="button" data-lk="\n">改行</button>
-    </div>
-    <div class="hint">各行を「結論 = A × B ÷ C」の因数分解の形で。= がない行は投稿できません</div>
+    <textarea id="logicInput" placeholder="計算機で組んで「型を追加」すると、ここに 結論 = A × B の形で入ります"></textarea>
+    <div class="hint">計算機で組んで「型を追加」で入れるのが基本。ここで直接手直しもできます</div>
 
     <label for="answerInput">A. 結論(任意・従来モード用)</label>
     <input type="text" id="answerInput" placeholder="例:約150時間(空欄でもOK)">
@@ -659,6 +651,7 @@ function esc(s) {
 // ---- 捜査計算機 ----
 var lastCalcValue = null;
 var calcTokens = [];
+var calcLines = [];
 var varValues = {};
 var lastVarKey = "";
 
@@ -779,13 +772,27 @@ function markLabels(tokens) {
 }
 
 function varList() {
+  // 全行から変数を集約。ただし、いずれかの行で左辺(結論)として定義された名前は
+  // 入力欄を作らない(それは別の行の計算結果で埋まるため)
+  var defined = {};
+  var li, i, toks;
+  for (li = 0; li < calcLines.length; li++) {
+    toks = calcLines[li].tokens;
+    for (i = 0; i < toks.length; i++) {
+      if (toks[i].t === "eq" && i > 0 && toks[i - 1].t === "label") {
+        defined[toks[i - 1].v] = true;
+      }
+    }
+  }
   var seen = {};
   var list = [];
-  var i;
-  for (i = 0; i < calcTokens.length; i++) {
-    if (calcTokens[i].t === "var" && !seen[calcTokens[i].v]) {
-      seen[calcTokens[i].v] = true;
-      list.push(calcTokens[i].v);
+  for (li = 0; li < calcLines.length; li++) {
+    toks = calcLines[li].tokens;
+    for (i = 0; i < toks.length; i++) {
+      if (toks[i].t === "var" && !seen[toks[i].v] && !defined[toks[i].v]) {
+        seen[toks[i].v] = true;
+        list.push(toks[i].v);
+      }
     }
   }
   return list;
@@ -858,59 +865,72 @@ function typePiece(tk) {
   return tk.v;
 }
 
+// 1行のトークンを {label, rhs} に分解
+function splitLine(tokens) {
+  var eqIdx = -1;
+  var k;
+  for (k = 0; k < tokens.length; k++) {
+    if (tokens[k].t === "eq") { eqIdx = k; }
+  }
+  if (eqIdx < 0) { return { label: "", rhs: tokens }; }
+  var label = "";
+  var p;
+  for (p = 0; p < eqIdx; p++) {
+    if (tokens[p].t === "label" || tokens[p].t === "var" || tokens[p].t === "num") {
+      label += tokens[p].v;
+    }
+  }
+  return { label: label, rhs: tokens.slice(eqIdx + 1) };
+}
+
+// 右辺トークンを式文字列に。resolved は他行で確定した左辺値のマップ
+function rhsToExpr(rhs, resolved) {
+  var expr = "";
+  var missingCount = 0;
+  var i, tk, piece, rv;
+  for (i = 0; i < rhs.length; i++) {
+    tk = rhs[i];
+    if (tk.t === "op") { expr += tk.v; continue; }
+    if (tk.t === "num") { expr += "(" + tk.v + ")"; continue; }
+    if (tk.t === "eq") { continue; }
+    if (tk.t === "label") { expr += ""; continue; }
+    // var: まず数値入力、なければ他行の確定値
+    var nm = valueParse(varValues[tk.v]);
+    if (nm !== null) { expr += "(" + nm + ")"; continue; }
+    if (resolved && typeof resolved[tk.v] === "number") { expr += "(" + resolved[tk.v] + ")"; continue; }
+    missingCount++;
+    expr += "(0)";
+  }
+  return { expr: expr, missing: missingCount };
+}
+
 function computeCalc() {
   var box = document.getElementById("calcResult");
-  if (calcTokens.length === 0) {
+  if (calcLines.length === 0) {
     lastCalcValue = null;
     box.className = "calc-result";
     box.textContent = "= ";
     renderSteps();
     return;
   }
-  // = があれば右辺だけを計算対象にする(左辺は結論ラベル)
-  var eqIdx = -1;
-  var k;
-  for (k = 0; k < calcTokens.length; k++) {
-    if (calcTokens[k].t === "eq") { eqIdx = k; }
-  }
-  var rhs = (eqIdx >= 0) ? calcTokens.slice(eqIdx + 1) : calcTokens;
-  var leftLabel = "";
-  if (eqIdx >= 0) {
-    var p;
-    for (p = 0; p < eqIdx; p++) {
-      if (calcTokens[p].t === "label" || calcTokens[p].t === "var" || calcTokens[p].t === "num") {
-        leftLabel += calcTokens[p].v;
-      }
-    }
-  }
-  var expr = "";
-  var missing = {};
-  var missingCount = 0;
-  var i, tk, piece;
-  for (i = 0; i < rhs.length; i++) {
-    tk = rhs[i];
-    piece = exprPiece(tk);
-    if (piece === null) {
-      if (!missing[tk.v]) { missing[tk.v] = true; missingCount++; }
-      expr += "(0)";
-    } else {
-      expr += piece;
-    }
-  }
   renderSteps();
-  if (rhs.length === 0) {
+  // 最終行(または唯一の行)の結果を大きく表示
+  var resolved = resolveLines();
+  var last = splitLine(calcLines[calcLines.length - 1].tokens);
+  if (last.rhs.length === 0) {
     lastCalcValue = null;
     box.className = "calc-result";
     box.textContent = "= 右辺を入力";
     return;
   }
-  if (missingCount > 0) {
+  var r = rhsToExpr(last.rhs, resolved);
+  if (r.missing > 0) {
     lastCalcValue = null;
     box.className = "calc-result";
-    box.textContent = "= 数値待ち(あと" + missingCount + "項目)";
+    box.textContent = "= 数値待ち(あと" + r.missing + "項目)";
     return;
   }
-  var v = evalExpr(expr);
+  var v = evalExpr(r.expr);
   if (v === null || isNaN(v)) {
     lastCalcValue = null;
     box.className = "calc-result err";
@@ -919,8 +939,28 @@ function computeCalc() {
   }
   lastCalcValue = v;
   box.className = "calc-result";
-  var prefix = leftLabel ? (esc(leftLabel) + " = ") : "= ";
+  var prefix = last.label ? (esc(last.label) + " = ") : "= ";
   box.innerHTML = prefix + esc(formatJP(v)) + '<span class="calc-raw">' + esc(String(v)) + "</span>";
+}
+
+// 各行の左辺=右辺を、依存を解決しながら数回パスで確定
+function resolveLines() {
+  var resolved = {};
+  var pass;
+  for (pass = 0; pass < calcLines.length + 1; pass++) {
+    var changed = false;
+    var li;
+    for (li = 0; li < calcLines.length; li++) {
+      var sp = splitLine(calcLines[li].tokens);
+      if (!sp.label || typeof resolved[sp.label] === "number") { continue; }
+      var r = rhsToExpr(sp.rhs, resolved);
+      if (r.missing > 0) { continue; }
+      var v = evalExpr(r.expr);
+      if (v !== null && !isNaN(v)) { resolved[sp.label] = v; changed = true; }
+    }
+    if (!changed) { break; }
+  }
+  return resolved;
 }
 
 // ()のグループを内側から順に拾う(直前がラベルなら名前付き)
@@ -941,38 +981,105 @@ function findGroups(tokens) {
 
 function renderSteps() {
   var box = document.getElementById("calcSteps");
-  var groups = findGroups(calcTokens);
-  if (groups.length === 0) { box.innerHTML = ""; return; }
+  if (calcLines.length === 0) { box.innerHTML = ""; return; }
+  var resolved = resolveLines();
   var html = "";
-  var gi, j, tk, piece, subExpr, subMemo, incomplete, v, valTxt, name;
-  for (gi = 0; gi < groups.length; gi++) {
-    subExpr = "";
-    subMemo = "";
-    incomplete = false;
-    for (j = groups[gi].start + 1; j < groups[gi].end; j++) {
-      tk = calcTokens[j];
-      piece = exprPiece(tk);
-      if (piece === null) { incomplete = true; subExpr += "(0)"; }
-      else { subExpr += piece; }
-      subMemo += memoPiece(tk);
-    }
-    if (incomplete) {
+  var li, sp, memo, r, v, valTxt, i;
+  for (li = 0; li < calcLines.length; li++) {
+    sp = splitLine(calcLines[li].tokens);
+    // 右辺のメモ表記(名前と数値)
+    memo = "";
+    for (i = 0; i < sp.rhs.length; i++) { memo += memoPiece(sp.rhs[i]); }
+    if (sp.rhs.length === 0) { continue; }
+    r = rhsToExpr(sp.rhs, resolved);
+    if (r.missing > 0) {
       valTxt = "数値待ち";
     } else {
-      v = evalExpr(subExpr);
+      v = evalExpr(r.expr);
       valTxt = (v === null || isNaN(v)) ? "式を確認" : formatJP(v);
     }
-    name = groups[gi].label ? groups[gi].label : "(" + subMemo + ")";
-    html += '<div class="step-line">' + esc(name) + ':' + esc(subMemo)
-      + ' = <span class="step-val">' + esc(valTxt) + "</span></div>";
+    var name = sp.label ? sp.label : "(結論)";
+    html += '<div class="step-line"><span class="step-val">' + esc(name) + "</span> = "
+      + esc(memo) + ' = <span class="step-val">' + esc(valTxt) + "</span></div>";
   }
   box.innerHTML = html;
 }
 
 function updateCalc() {
-  calcTokens = markLabels(parseTemplate(document.getElementById("calcInput").value));
+  var raw = document.getElementById("calcInput").value;
+  calcLines = tokenizeLines(raw);
+  // 後方互換:単一トークン列としても保持(先頭行)
+  calcTokens = calcLines.length ? calcLines[0].tokens : [];
   renderVarInputs();
   computeCalc();
+}
+
+// 入力を行に分割してトークン化。2つ目以降の「名前 =」は自動で改行扱い
+function tokenizeLines(raw) {
+  // まず手動改行で分割
+  var chunks = raw.split("\n");
+  var lines = [];
+  var c;
+  for (c = 0; c < chunks.length; c++) {
+    var toks = markLabels(parseTemplate(chunks[c]));
+    // 1行の中に = が2つ以上 → 2つ目の = の直前ラベルの手前で分割
+    var segments = splitByExtraEquals(toks);
+    var s;
+    for (s = 0; s < segments.length; s++) {
+      if (segments[s].length > 0) {
+        lines.push({ tokens: segments[s] });
+      }
+    }
+  }
+  return lines;
+}
+
+// トークン列に = が複数あれば、2つ目以降の「ラベル =」の直前で切る
+function splitByExtraEquals(tokens) {
+  var eqPositions = [];
+  var i;
+  for (i = 0; i < tokens.length; i++) {
+    if (tokens[i].t === "eq") { eqPositions.push(i); }
+  }
+  if (eqPositions.length <= 1) { return [tokens]; }
+
+  // 2つ目以降の = の直前ラベルに内部スペースがあれば、最後の語を新しい行のラベルに分離
+  // (例: 「客単価 客数」= → 前行末尾に「客単価」、新行ラベルに「客数」)
+  var work = [];
+  for (i = 0; i < tokens.length; i++) {
+    var tk = tokens[i];
+    var isBeforeExtraEq = (i + 1 < tokens.length && tokens[i + 1].t === "eq"
+      && eqPositions.indexOf(i + 1) >= 1);
+    if (isBeforeExtraEq && (tk.t === "label" || tk.t === "var")
+        && /[\s\u3000]/.test(tk.v.replace(/^[\s\u3000]+|[\s\u3000]+$/g, ""))) {
+      var trimmed = tk.v.replace(/^[\s\u3000]+|[\s\u3000]+$/g, "");
+      var lastSp = Math.max(trimmed.lastIndexOf(" "), trimmed.lastIndexOf("\u3000"));
+      var head = trimmed.slice(0, lastSp).replace(/[\s\u3000]+$/g, "");
+      var tail = trimmed.slice(lastSp + 1);
+      if (head) { work.push({ t: "var", v: head, __splitHead: true }); }
+      work.push({ t: "label", v: tail });
+    } else {
+      work.push(tk);
+    }
+  }
+  // work上で = 位置を取り直して分割
+  var eqPos2 = [];
+  for (i = 0; i < work.length; i++) { if (work[i].t === "eq") { eqPos2.push(i); } }
+  var cuts = [];
+  var e;
+  for (e = 1; e < eqPos2.length; e++) {
+    var cut = eqPos2[e] - 1;
+    if (cut > 0) { cuts.push(cut); }
+  }
+  var segs = [];
+  var start = 0;
+  var k;
+  for (k = 0; k < cuts.length; k++) {
+    segs.push(work.slice(start, cuts[k]));
+    start = cuts[k];
+  }
+  segs.push(work.slice(start));
+  return segs;
 }
 
 function buildMemoLine() {
@@ -985,9 +1092,14 @@ function buildMemoLine() {
 }
 
 function insertKey(k) {
-  var input = document.getElementById("calcInput");
-  input.value += k;
-  input.focus();
+  if (k === "\\n") { k = "\n"; }
+  var el = document.getElementById("calcInput");
+  var start = (typeof el.selectionStart === "number") ? el.selectionStart : el.value.length;
+  var end = (typeof el.selectionEnd === "number") ? el.selectionEnd : el.value.length;
+  el.value = el.value.slice(0, start) + k + el.value.slice(end);
+  var pos = start + k.length;
+  el.focus();
+  try { el.setSelectionRange(pos, pos); } catch (e) {}
   updateCalc();
 }
 
@@ -1020,51 +1132,77 @@ function buildTypeLine() {
 }
 
 function calcToLogic() {
-  if (calcTokens.length === 0) { showToast("先に式を組んで"); return; }
+  if (calcLines.length === 0) { showToast("先に式を組んで"); return; }
+  var newLines = buildFactorLines();
+  if (newLines.length === 0) { showToast("先に式を組んで"); return; }
   var logic = document.getElementById("logicInput");
-  var line = buildFactorLine();
-
   var existing = logic.value.split("\n");
-  var i;
-  for (i = 0; i < existing.length; i++) {
-    if (existing[i].replace(/[\s\u3000]/g, "") === line.replace(/[\s\u3000]/g, "")) {
-      showToast("同じ型がすでにあります");
-      flashLogic();
-      return;
+  var norm = function (s) { return s.replace(/[\s\u3000]/g, ""); };
+  var added = 0;
+  var dup = 0;
+  var li, j, isDup;
+  for (li = 0; li < newLines.length; li++) {
+    isDup = false;
+    for (j = 0; j < existing.length; j++) {
+      if (norm(existing[j]) === norm(newLines[li])) { isDup = true; break; }
     }
+    if (isDup) { dup++; continue; }
+    logic.value = logic.value.replace(/[\s\u3000]+$/, "");
+    logic.value = logic.value ? (logic.value + "\n" + newLines[li]) : newLines[li];
+    existing.push(newLines[li]);
+    added++;
   }
-  logic.value = logic.value.replace(/[\s\u3000]+$/, "");
-  logic.value = logic.value ? (logic.value + "\n" + line) : line;
   updatePreview();
-  showToast("型を追記しました(" + logic.value.split("\n").length + "行目)");
+  if (added === 0) {
+    showToast("同じ型がすでにあります");
+    flashLogic();
+  } else {
+    showToast(added + "行の型を追記" + (dup ? "(重複" + dup + "行は除外)" : ""));
+  }
 }
 
-// 計算機の式を「左辺 = 右辺」の1行に整形
-function buildFactorLine() {
-  // パターン: 全体が「名前(式)」= 先頭がラベルで直後が(、末尾が)
-  var n = calcTokens.length;
-  if (n >= 3 && calcTokens[0].t === "label" && calcTokens[1].t === "op"
-      && calcTokens[1].v === "(" && calcTokens[n - 1].t === "op" && calcTokens[n - 1].v === ")") {
-    // 括弧の対応を確認(先頭の( が末尾の ) と対応しているか)
-    var depth = 0;
-    var matched = true;
-    var i;
+// 計算機の各行を「左辺 = 右辺」の因数分解行に整形して配列で返す
+function buildFactorLines() {
+  var out = [];
+  var li;
+  for (li = 0; li < calcLines.length; li++) {
+    var line = factorLineFromTokens(calcLines[li].tokens);
+    if (line) { out.push(line); }
+  }
+  return out;
+}
+
+function factorLineFromTokens(tokens) {
+  var n = tokens.length;
+  if (n === 0) { return ""; }
+  // 既に = を含む → typeで整形して返す
+  var hasEq = false, i;
+  for (i = 0; i < n; i++) { if (tokens[i].t === "eq") { hasEq = true; break; } }
+  if (hasEq) {
+    var out = "";
+    for (i = 0; i < n; i++) { out += typePiece(tokens[i]); }
+    return out;
+  }
+  // 「名前(式)」形 → 名前 = 式
+  if (n >= 3 && tokens[0].t === "label" && tokens[1].t === "op" && tokens[1].v === "("
+      && tokens[n - 1].t === "op" && tokens[n - 1].v === ")") {
+    var depth = 0, matched = true;
     for (i = 1; i < n; i++) {
-      if (calcTokens[i].t === "op" && calcTokens[i].v === "(") { depth++; }
-      else if (calcTokens[i].t === "op" && calcTokens[i].v === ")") {
+      if (tokens[i].t === "op" && tokens[i].v === "(") { depth++; }
+      else if (tokens[i].t === "op" && tokens[i].v === ")") {
         depth--;
         if (depth === 0 && i !== n - 1) { matched = false; break; }
       }
     }
     if (matched) {
       var inner = "";
-      for (i = 2; i < n - 1; i++) { inner += typePiece(calcTokens[i]); }
-      return calcTokens[0].v + " = " + inner;
+      for (i = 2; i < n - 1; i++) { inner += typePiece(tokens[i]); }
+      return tokens[0].v + " = " + inner;
     }
   }
-  // それ以外は右辺として扱い、左辺は編集用プレースホルダ
-  var right = buildTypeLine();
-  if (/[=\uFF1D]/.test(right)) { return right; }
+  // それ以外 → 結論 = 右辺
+  var right = "";
+  for (i = 0; i < n; i++) { right += typePiece(tokens[i]); }
   return "結論 = " + right;
 }
 
@@ -1116,15 +1254,6 @@ function init() {
   for (k = 0; k < keys.length; k++) {
     keys[k].addEventListener("click", function () {
       insertKey(this.getAttribute("data-k"));
-    });
-  }
-  var lkeys = document.querySelectorAll("#logicKeys button[data-lk]");
-  var lk;
-  for (lk = 0; lk < lkeys.length; lk++) {
-    lkeys[lk].addEventListener("click", function () {
-      var s = this.getAttribute("data-lk");
-      if (s === "\\n") { s = "\n"; }
-      insertIntoLogic(s);
     });
   }
   document.getElementById("btnCopy").addEventListener("click", copyText);
