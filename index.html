@@ -358,6 +358,13 @@ footer { text-align: center; font-size: 11px; color: #6b6152; margin-top: 30px; 
       <button class="btn btn-copy" id="btnCopy" type="button">コピー</button>
       <button class="btn btn-post" id="btnPost" type="button">Xで投稿</button>
     </div>
+
+    <label>インフォグラフィック用プロンプト</label>
+    <div class="btn-row">
+      <button class="btn" id="btnGenPrompt" type="button">プロンプト生成</button>
+      <button class="btn" id="btnCopyPrompt" type="button">プロンプトをコピー</button>
+    </div>
+    <div class="preview" id="promptBox">「プロンプト生成」を押すと、今の計算内容から画像生成用のプロンプトを作ります</div>
   </div>
 
   <div class="history">
@@ -736,6 +743,87 @@ function pad3(n) {
   var s = String(n);
   while (s.length < 3) { s = "0" + s; }
   return s;
+}
+
+// ---- インフォグラフィック用プロンプト生成 ----
+function buildInfographicPrompt() {
+  var q = QUESTIONS[currentIndex].q;
+  var parts = buildNumberParts();
+  var logic = document.getElementById("logicInput").value.trim();
+  var lines = [];
+
+  lines.push("日本語のインフォグラフィックを1枚作成してください。縦4:5、SNS投稿用。");
+  lines.push("");
+  lines.push("■ タイトル(上部に大きく)");
+  lines.push(q);
+  lines.push("");
+
+  if (parts.mid.length > 0 || parts.concl.length > 0) {
+    if (parts.mid.length > 0) {
+      lines.push("■ 計算ステップ(上から順に、矢印でつなぐ)");
+      var i;
+      for (i = 0; i < parts.mid.length; i++) {
+        lines.push("STEP" + (i + 1) + ": " + parts.mid[i]);
+      }
+      lines.push("");
+    }
+    if (parts.concl.length > 0) {
+      lines.push("■ 結論(最も大きく、赤で強調。枠で囲む)");
+      lines.push(parts.concl[0]);
+      lines.push("");
+    }
+  } else if (logic) {
+    lines.push("■ 計算ステップ(上から順に、矢印でつなぐ)");
+    lines.push(logic);
+    lines.push("");
+  }
+
+  lines.push("■ デザイン指定");
+  lines.push("・探偵事務所の捜査ファイル風。古い書類・方眼紙のような質感");
+  lines.push("・背景色 #E8DCC3(生成りのクラフト紙)、カード面 #FBF7EC");
+  lines.push("・文字色 #1F2A38(濃紺)、強調色 #B3402E(スタンプ赤)");
+  lines.push("・数値は等幅フォントで大きく。単位も併記");
+  lines.push("・各ステップは左に赤い縦線を引いたカードで表現");
+  lines.push("・写真やイラストは使わず、文字と罫線と矢印だけで構成");
+  lines.push("・余白を広めにとり、スマホでも数字が読めるサイズに");
+  lines.push("");
+  lines.push("■ 注意");
+  lines.push("・日本語は誤字なく正確に描画すること");
+  lines.push("・数式と数値は上記の通り一字一句変更しないこと");
+  lines.push("・装飾で数字が読みにくくならないようにすること");
+
+  return lines.join("\n");
+}
+
+function genPrompt() {
+  var text = buildInfographicPrompt();
+  document.getElementById("promptBox").textContent = text;
+  showToast("プロンプトを生成しました");
+}
+
+function copyPrompt() {
+  var text = document.getElementById("promptBox").textContent;
+  if (!text || text.indexOf("「プロンプト生成」") === 0) {
+    showToast("先にプロンプトを生成してください");
+    return;
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function () {
+      showToast("プロンプトをコピーしました");
+    }, function () { fallbackCopyRaw(text); });
+  } else {
+    fallbackCopyRaw(text);
+  }
+}
+
+function fallbackCopyRaw(text) {
+  var ta = document.createElement("textarea");
+  ta.value = text;
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand("copy"); } catch (e) {}
+  document.body.removeChild(ta);
+  showToast("プロンプトをコピーしました");
 }
 
 function copyText() {
@@ -1449,6 +1537,8 @@ function init() {
   document.getElementById("btnToAnswer").addEventListener("click", calcToAnswer);
   document.getElementById("btnToLogic").addEventListener("click", calcToLogic);
   document.getElementById("btnSensitivity").addEventListener("click", runSensitivity);
+  document.getElementById("btnGenPrompt").addEventListener("click", genPrompt);
+  document.getElementById("btnCopyPrompt").addEventListener("click", copyPrompt);
   document.getElementById("keyClear").addEventListener("click", function () {
     if (!confirm("入力を全部消します。よろしいですか?")) { return; }
     document.getElementById("calcInput").value = "";
