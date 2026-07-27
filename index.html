@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>毎日フェルミ捜査 | 2データ探偵事務所</title>
+<title>毎日フェルミ捜査 | データ探偵事務所</title>
 <style>
 :root {
   --paper: #E8DCC3;
@@ -372,11 +372,30 @@ footer { text-align: center; font-size: 11px; color: #6b6152; margin-top: 30px; 
     <div id="historyBox"></div>
   </div>
 
-  <footer>DATA DETECTIVE AGENCY — DAILY ESTIMATION CASE FILES</footer>
+  <footer>
+    DATA DETECTIVE AGENCY — DAILY ESTIMATION CASE FILES<br>
+    <span id="verBox"></span>
+  </footer>
 </div>
 <div class="toast" id="toast">コピーしました</div>
 
 <script>
+/* ===========================================================
+   毎日フェルミ捜査 — 変更履歴
+   v1.0  日替わりお題 + X投稿文生成
+   v1.1  捜査計算機(言葉で式→数値入力)
+   v1.2  単位対応・途中式表示
+   v1.3  お題をHR・採用に総入れ替え(48問)
+   v1.4  因数分解チェック(= 必須)
+   v1.5  計算機の複数行対応・クロス参照計算
+   v1.6  投稿に数字を入れる方式へ変更
+   v1.7  ボトルネック捜査(感度分析)
+   v1.8  途中式と結論を分離・結論判定の修正
+   v1.9  インフォグラフィック用プロンプト生成
+   =========================================================== */
+var APP_VERSION = "v1.9";
+var APP_UPDATED = "2026-07-27";
+
 var QUESTIONS = [
   // 採用ファネル(母集団→内定)
   { c: "採用ファネル", q: "月5人採用したい。応募→書類→面接→内定の通過率から、必要な応募数は何件?" },
@@ -1516,6 +1535,7 @@ function init() {
     "File #" + pad3(fileNo) + "<br>" + n.getFullYear() + "." + (n.getMonth() + 1) + "." + n.getDate();
   showQuestion(todayIndex);
   renderHistory();
+  document.getElementById("verBox").textContent = APP_VERSION + " (" + APP_UPDATED + ")";
   var data = loadJSON("fermiDaily_streak", { last: "", count: 0 });
   renderStreak(data.count);
 
