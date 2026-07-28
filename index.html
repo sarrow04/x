@@ -118,6 +118,45 @@ input[type="text"], textarea {
 }
 textarea { min-height: 90px; resize: vertical; }
 textarea.calc-input { min-height: 52px; }
+select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 15px;
+  padding: 8px 10px;
+  color: var(--ink);
+}
+.stat-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.stat-chip {
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 3px;
+  padding: 5px 9px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--ink);
+  text-align: left;
+}
+.stat-chip:active { background: var(--line); }
+.stat-chip b { color: var(--stamp); font-family: "Courier New", monospace; margin-left: 4px; }
+.stat-note { font-size: 11px; color: #6b6152; margin-top: 4px; }
+.area-badge.unused { color: #6b6152; border-color: var(--line); font-weight: 400; font-size: 12px; }
+.area-badge {
+  display: inline-block;
+  margin: 4px 0 2px;
+  font-family: "Hiragino Mincho ProN", serif;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--stamp);
+  border: 1px solid var(--stamp);
+  border-radius: 3px;
+  padding: 2px 12px;
+  background: var(--card);
+}
 input:focus, textarea:focus { outline: 2px solid var(--stamp); outline-offset: 1px; }
 .hint { font-size: 11px; color: #6b6152; margin-top: 3px; }
 .calc-keys { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
@@ -295,6 +334,7 @@ footer { text-align: center; font-size: 11px; color: #6b6152; margin-top: 30px; 
   <header>
     <div class="agency">データ探偵事務所</div>
     <h1>毎日フェルミ捜査</h1>
+    <div id="areaBadge"></div>
     <div class="streak" id="streakBox">連続捜査 0日</div>
   </header>
 
@@ -306,6 +346,10 @@ footer { text-align: center; font-size: 11px; color: #6b6152; margin-top: 30px; 
       <button class="link-btn" id="btnAnother" type="button">別の事件を捜査する</button>
       <button class="link-btn" id="btnToday" type="button">今日の事件に戻る</button>
     </div>
+
+    <label for="areaSelect">地域データ(実数値・杉並/中野/武蔵野)</label>
+    <select id="areaSelect"></select>
+    <div id="areaStats"></div>
 
     <label for="calcInput">捜査計算機 — まず式を言葉で組む</label>
     <textarea id="calcInput" class="calc-input" placeholder="例:&#10;売上 = 客数 × 客単価&#10;客数 = 新規 + リピート"></textarea>
@@ -392,66 +436,147 @@ footer { text-align: center; font-size: 11px; color: #6b6152; margin-top: 30px; 
    v1.7  ボトルネック捜査(感度分析)
    v1.8  途中式と結論を分離・結論判定の修正
    v1.9  インフォグラフィック用プロンプト生成
+   v2.0  地域×HRのお題を追加(中央線沿線・全62問)
+   v2.1  地域データ68エリア搭載(杉並/中野/武蔵野・実数値をタップ挿入)
+   v2.2  地域データは「言葉で式に、数値は欄に自動」方式に変更
+   v2.3  50代/60代人口を追加(犯罪件数は削除)・選択エリアをタイトルと投稿に表示
+   v2.4  エリア名は実際にデータを使ったときだけ投稿に出す
+   v3.0  お題を全面刷新(48問)— 選択エリアが差し込まれ、地域データ必須の設問だけに
    =========================================================== */
-var APP_VERSION = "v1.9";
+var AREA_DATA = [
+  {n:"阿佐ヶ谷北",c:"杉並区",st:"阿佐ヶ谷駅",pop:25030,hh:15529,p20:3773,p30:3858,p40:3902,p50:3851,p60:2553,biz:837,emp:5984},
+  {n:"阿佐ヶ谷南",c:"杉並区",st:"阿佐ヶ谷駅",pop:19529,hh:12828,p20:3136,p30:3317,p40:3127,p50:3010,p60:2066,biz:1147,emp:8442},
+  {n:"天沼",c:"杉並区",st:"荻窪駅",pop:16047,hh:10137,p20:2777,p30:2695,p40:2350,p50:2282,p60:1627,biz:543,emp:4689},
+  {n:"井草",c:"杉並区",st:"井荻駅",pop:17644,hh:9882,p20:2607,p30:2463,p40:2557,p50:2739,p60:1805,biz:441,emp:4098},
+  {n:"和泉",c:"杉並区",st:"永福町駅",pop:28951,hh:17555,p20:5045,p30:4756,p40:4410,p50:4004,p60:2721,biz:732,emp:7398},
+  {n:"今川",c:"杉並区",st:"住宅地",pop:9679,hh:4717,p20:1026,p30:1178,p40:1420,p50:1517,p60:1179,biz:223,emp:2170},
+  {n:"梅里",c:"杉並区",st:"東・新高円寺",pop:8350,hh:5666,p20:1470,p30:1436,p40:1248,p50:1182,p60:879,biz:334,emp:2989},
+  {n:"永福",c:"杉並区",st:"永福町駅",pop:16113,hh:9190,p20:2599,p30:2348,p40:2192,p50:2271,p60:1682,biz:597,emp:5289},
+  {n:"大宮",c:"杉並区",st:"住宅地",pop:3457,hh:2017,p20:499,p30:452,p40:487,p50:553,p60:410,biz:125,emp:895},
+  {n:"荻窪",c:"杉並区",st:"荻窪駅",pop:25914,hh:14617,p20:3247,p30:3809,p40:3950,p50:4055,p60:2789,biz:1209,emp:8352},
+  {n:"上井草",c:"杉並区",st:"上井草",pop:16040,hh:8225,p20:2018,p30:1954,p40:2334,p50:2568,p60:1833,biz:440,emp:4096},
+  {n:"上荻",c:"杉並区",st:"荻窪駅",pop:13911,hh:8423,p20:2075,p30:2319,p40:2131,p50:2084,p60:1475,biz:946,emp:9492},
+  {n:"上高井戸",c:"杉並区",st:"八幡山駅",pop:12381,hh:7500,p20:2264,p30:1941,p40:1786,p50:1827,p60:1247,biz:383,emp:3444},
+  {n:"久我山",c:"杉並区",st:"久我山駅",pop:20594,hh:11333,p20:2594,p30:2640,p40:2895,p50:3116,p60:2441,biz:595,emp:4508},
+  {n:"高円寺北",c:"杉並区",st:"高円寺駅",pop:16572,hh:11616,p20:3321,p30:2961,p40:2760,p50:2338,p60:1404,biz:921,emp:6817},
+  {n:"高円寺南",c:"杉並区",st:"高円寺駅",pop:32328,hh:22409,p20:6385,p30:5963,p40:5152,p50:4573,p60:2928,biz:1765,emp:12799},
+  {n:"清水",c:"杉並区",st:"上井草駅",pop:8845,hh:4812,p20:1216,p30:1239,p40:1270,p50:1341,p60:960,biz:179,emp:1550},
+  {n:"下井草",c:"杉並区",st:"下井草駅",pop:18659,hh:10565,p20:2698,p30:2680,p40:2744,p50:2691,p60:2074,biz:551,emp:3825},
+  {n:"下高井戸",c:"杉並区",st:"下高井戸駅",pop:20610,hh:12655,p20:3747,p30:3023,p40:2889,p50:2879,p60:2109,biz:500,emp:3977},
+  {n:"松庵",c:"杉並区",st:"西荻窪駅",pop:11039,hh:6264,p20:1497,p30:1567,p40:1590,p50:1842,p60:1251,biz:368,emp:2049},
+  {n:"善福寺",c:"杉並区",st:"西荻窪駅",pop:12313,hh:6058,p20:1297,p30:1362,p40:1833,p50:1970,p60:1544,biz:220,emp:2010},
+  {n:"高井戸西",c:"杉並区",st:"高井戸駅",pop:11420,hh:6525,p20:1341,p30:1345,p40:1439,p50:1530,p60:1213,biz:309,emp:4713},
+  {n:"高井戸東",c:"杉並区",st:"高井戸駅",pop:20171,hh:10581,p20:2541,p30:2481,p40:2758,p50:3145,p60:2478,biz:454,emp:5095},
+  {n:"成田西",c:"杉並区",st:"浜田山駅",pop:9184,hh:4279,p20:1023,p30:1031,p40:1301,p50:1481,p60:1142,biz:136,emp:894},
+  {n:"成田東",c:"杉並区",st:"住宅地",pop:23425,hh:12834,p20:2743,p30:3105,p40:3804,p50:3595,p60:2589,biz:599,emp:3488},
+  {n:"西荻北",c:"杉並区",st:"西荻窪駅",pop:17461,hh:10782,p20:2431,p30:2463,p40:2688,p50:2933,p60:2018,biz:869,emp:5203},
+  {n:"西荻南",c:"杉並区",st:"西荻窪駅",pop:12159,hh:7525,p20:1884,p30:1831,p40:1894,p50:1945,p60:1314,biz:697,emp:4459},
+  {n:"浜田山",c:"杉並区",st:"浜田山駅",pop:16981,hh:8987,p20:2157,p30:1995,p40:2313,p50:2824,p60:2161,biz:561,emp:3570},
+  {n:"方南",c:"杉並区",st:"方南町駅",pop:13751,hh:8537,p20:2234,p30:2453,p40:2179,p50:1928,p60:1184,biz:382,emp:2199},
+  {n:"堀ノ内",c:"杉並区",st:"方南町駅",pop:20360,hh:12022,p20:3053,p30:3361,p40:3028,p50:2884,p60:1972,biz:370,emp:3584},
+  {n:"本天沼",c:"杉並区",st:"住宅地",pop:11789,hh:6286,p20:1367,p30:1681,p40:1847,p50:1663,p60:1211,biz:179,emp:1298},
+  {n:"松ノ木",c:"杉並区",st:"東・新高円寺",pop:7785,hh:4499,p20:1132,p30:1145,p40:1161,p50:1205,p60:769,biz:154,emp:712},
+  {n:"南荻窪",c:"杉並区",st:"荻窪駅",pop:14514,hh:7579,p20:1868,p30:2048,p40:2066,p50:2234,p60:1627,biz:275,emp:2317},
+  {n:"宮前",c:"杉並区",st:"久我山駅",pop:19310,hh:9755,p20:2365,p30:2346,p40:2785,p50:3045,p60:2246,biz:377,emp:3900},
+  {n:"桃井",c:"杉並区",st:"住宅地",pop:11790,hh:6203,p20:1382,p30:1386,p40:1722,p50:2024,p60:1324,biz:311,emp:2845},
+  {n:"和田",c:"杉並区",st:"東・新高円寺",pop:20245,hh:12652,p20:3447,p30:3321,p40:3039,p50:2713,p60:1956,biz:545,emp:5988},
+  {n:"南台",c:"中野区",st:"方南町駅",pop:20901,hh:12896,p20:3068,p30:3412,p40:3270,p50:2854,p60:1946,biz:530,emp:3681},
+  {n:"中野",c:"中野区",st:"中野駅",pop:27707,hh:18255,p20:4664,p30:5021,p40:4203,p50:3590,p60:2266,biz:2184,emp:34314},
+  {n:"中央",c:"中野区",st:"新中野",pop:30046,hh:20213,p20:4803,p30:5718,p40:5005,p50:3693,p60:2393,biz:1160,emp:13289},
+  {n:"東中野",c:"中野区",st:"東中野",pop:25464,hh:16806,p20:3825,p30:4660,p40:4058,p50:3025,p60:2018,biz:108,emp:10747},
+  {n:"新井",c:"中野区",st:"中野駅",pop:18726,hh:12591,p20:2862,p30:3568,p40:3170,p50:2428,p60:1523,biz:761,emp:6019},
+  {n:"鷺宮",c:"中野区",st:"鷺ノ宮駅",pop:17921,hh:11136,p20:2964,p30:2570,p40:2542,p50:2214,p60:1541,biz:545,emp:3222},
+  {n:"本町",c:"中野区",st:"中野新橋",pop:30160,hh:20674,p20:4680,p30:5618,p40:4959,p50:3704,p60:2601,biz:1273,emp:18951},
+  {n:"上高田",c:"中野区",st:"中野駅",pop:21031,hh:13921,p20:3495,p30:3541,p40:3186,p50:2538,p60:1903,biz:489,emp:2861},
+  {n:"野方",c:"中野区",st:"野方駅",pop:21937,hh:14225,p20:3775,p30:3563,p40:3211,p50:2811,p60:1881,biz:653,emp:3658},
+  {n:"弥生町",c:"中野区",st:"中野新橋駅",pop:24066,hh:16009,p20:3475,p30:4180,p40:3812,p50:2745,p60:2032,biz:893,emp:6755},
+  {n:"大和町",c:"中野区",st:"高円寺駅",pop:16396,hh:10644,p20:2994,p30:2855,p40:2418,p50:1942,p60:1262,biz:370,emp:1678},
+  {n:"沼袋",c:"中野区",st:"沼袋駅",pop:13925,hh:9404,p20:2293,p30:2060,p40:2005,p50:1643,p60:1345,biz:417,emp:2491},
+  {n:"江古田",c:"中野区",st:"新江古田駅",pop:13989,hh:8193,p20:2157,p30:2301,p40:2044,p50:1524,p60:1205,biz:307,emp:4477},
+  {n:"白鷺",c:"中野区",st:"鷺ノ宮駅",pop:12421,hh:6758,p20:1506,p30:1763,p40:1682,p50:1525,p60:1085,biz:177,emp:1277},
+  {n:"松が丘",c:"中野区",st:"新井薬師前駅",pop:6755,hh:4314,p20:943,p30:976,p40:1000,p50:882,p60:679,biz:181,emp:1186},
+  {n:"若宮",c:"中野区",st:"都立家政駅",pop:13245,hh:8478,p20:2094,p30:2014,p40:1861,p50:1483,p60:1166,biz:286,emp:1082},
+  {n:"上鷺宮",c:"中野区",st:"富士見台駅",pop:14768,hh:7731,p20:1649,p30:1957,p40:2207,p50:2007,p60:1426,biz:292,emp:1764},
+  {n:"江原町",c:"中野区",st:"新江古田駅",pop:9459,hh:5666,p20:1195,p30:1387,p40:1443,p50:1268,p60:889,biz:245,emp:4214},
+  {n:"丸山",c:"中野区",st:"野方駅",pop:4997,hh:2906,p20:823,p30:649,p40:773,p50:682,p60:476,biz:119,emp:1308},
+  {n:"中町",c:"武蔵野市",st:"三鷹駅",pop:15126,hh:8331,p20:1832,p30:2198,p40:2443,p50:2250,p60:1603,biz:855,emp:13539},
+  {n:"八幡町",c:"武蔵野市",st:"住宅地",pop:4371,hh:2063,p20:423,p30:598,p40:607,p50:581,p60:501,biz:96,emp:843},
+  {n:"吉祥寺北町",c:"武蔵野市",st:"住宅地",pop:15419,hh:7698,p20:1627,p30:1681,p40:2206,p50:2530,p60:1777,biz:336,emp:3236},
+  {n:"吉祥寺南町",c:"武蔵野市",st:"吉祥寺駅",pop:13237,hh:7604,p20:1837,p30:1705,p40:1891,p50:2014,p60:1597,biz:1302,emp:11501},
+  {n:"吉祥寺本町",c:"武蔵野市",st:"吉祥寺駅",pop:11908,hh:7434,p20:1770,p30:1758,p40:1868,p50:1847,p60:1338,biz:2443,emp:22869},
+  {n:"吉祥寺東町",c:"武蔵野市",st:"吉祥寺駅",pop:12817,hh:7144,p20:1758,p30:1587,p40:1785,p50:1999,p60:1484,biz:349,emp:2634},
+  {n:"境",c:"武蔵野市",st:"武蔵境駅",pop:16541,hh:8912,p20:2406,p30:2563,p40:2284,p50:2457,p60:1757,biz:536,emp:5549},
+  {n:"境南町",c:"武蔵野市",st:"武蔵境駅",pop:15415,hh:8533,p20:1965,p30:2103,p40:2275,p50:2223,p60:1724,biz:667,emp:9043},
+  {n:"御殿山",c:"武蔵野市",st:"吉祥寺駅",pop:4393,hh:2488,p20:442,p30:626,p40:716,p50:753,p60:503,biz:210,emp:1432},
+  {n:"桜堤",c:"武蔵野市",st:"住宅地",pop:9118,hh:4036,p20:725,p30:779,p40:1490,p50:1540,p60:1040,biz:111,emp:882},
+  {n:"緑町",c:"武蔵野市",st:"住宅地",pop:8288,hh:4125,p20:677,p30:705,p40:1117,p50:1380,p60:1007,biz:183,emp:3292},
+  {n:"西久保",c:"武蔵野市",st:"三鷹駅",pop:12311,hh:7015,p20:1571,p30:1837,p40:1983,p50:1774,p60:1205,biz:415,emp:6841},
+  {n:"関前",c:"武蔵野市",st:"住宅地",pop:9486,hh:4670,p20:1090,p30:1178,p40:1388,p50:1459,p60:1100,biz:214,emp:2048}
+];
+
+var selectedArea = null;
+
+var APP_VERSION = "v3.0";
 var APP_UPDATED = "2026-07-27";
 
 var QUESTIONS = [
-  // 採用ファネル(母集団→内定)
-  { c: "採用ファネル", q: "月5人採用したい。応募→書類→面接→内定の通過率から、必要な応募数は何件?" },
-  { c: "採用ファネル", q: "内定承諾率60%の会社。5人採るには内定を何人分出す必要がある?" },
-  { c: "採用ファネル", q: "求人1件の応募が月10件。年間で採用まで至るのは何人?" },
-  { c: "採用ファネル", q: "書類通過30%・面接通過25%。100応募から何人が内定にたどり着く?" },
-  { c: "採用ファネル", q: "エンジニア1人を採るのに必要な母集団は、事務職の何倍?" },
-  { c: "採用ファネル", q: "スカウト返信率5%・面談化50%。月10面談を作るには何通送る?" },
-  { c: "採用ファネル", q: "面接辞退率が10%→30%に上がると、必要な応募数は何倍になる?" },
-  { c: "採用ファネル", q: "内定辞退を見込んで、10人採るなら何人に内定を出しておくべき?" },
-  { c: "採用ファネル", q: "採用広告費50万円で応募100件。1採用あたりの広告単価は?" },
-  { c: "採用ファネル", q: "リファラル採用を2割に増やすと、母集団形成コストは何%減る?" },
-  // 採用オペレーション(工数)
-  { c: "採用オペ工数", q: "月30人採用するには、面接官の稼働は月何時間必要?" },
-  { c: "採用オペ工数", q: "書類選考を1件5分→AI補助で1分にしたら、採用担当は何人分浮く?" },
-  { c: "採用オペ工数", q: "応募者との日程調整メール、自動化前は月何通打っている?" },
-  { c: "採用オペ工数", q: "面接1件あたり、調整・実施・評価入力で合計何分かかっている?" },
-  { c: "採用オペ工数", q: "採用媒体3つをATSに一元化したら、週何時間の管理工数が浮く?" },
-  { c: "採用オペ工数", q: "1次面接をオンライン化したら、面接官の月間移動時間は何時間浮く?" },
-  { c: "採用オペ工数", q: "面接官2人で月80応募を捌くと、選考リードタイムは何日になる?" },
-  { c: "採用オペ工数", q: "応募から内定連絡まで、今のフローで平均何日かかっている?" },
-  { c: "採用オペ工数", q: "面接評価をフォーム化したら、評価集約の工数は月何時間減る?" },
-  { c: "採用オペ工数", q: "採用担当1人が同時に回せる進行中の候補者は何人まで?" },
-  // 採用コスト・単価
-  { c: "採用コスト", q: "採用1人あたりにかかる平均コストは?(媒体+人件費+面接工数)" },
-  { c: "採用コスト", q: "1回の中途面接にかかる企業側のコスト(面接官の時給換算)は?" },
-  { c: "採用コスト", q: "採用単価を30万→20万に下げたら、年50人採用で総額いくら浮く?" },
-  { c: "採用コスト", q: "エージェント経由(理論年収の35%)と自社採用、1人あたり差額は?" },
-  { c: "採用コスト", q: "面接ドタキャン率20%の会社。枠の埋め直しに年間何時間かかる?" },
-  { c: "採用コスト", q: "採用が1ヶ月遅れると、その職種の機会損失はいくら?" },
-  { c: "採用コスト", q: "内定辞退1件あたり、それまでにかけた採用コストはいくら?" },
-  { c: "採用コスト", q: "バイト面接の無断キャンセルによる損失は、年間何人分の採用費?" },
-  // 定着・離職
-  { c: "定着・離職", q: "離職率を20%→15%に下げたら、年間の採用費はいくら浮く?" },
-  { c: "定着・離職", q: "入社3ヶ月以内の早期離職1人の損失(採用+研修+機会)は?" },
-  { c: "定着・離職", q: "100人の会社で離職率15%。毎年何人を採り直す必要がある?" },
-  { c: "定着・離職", q: "オンボーディングを整えて立ち上がりを1ヶ月早めると、1人あたり効果は?" },
-  { c: "定着・離職", q: "1on1を月1回導入。全社員分で管理職の稼働は月何時間増える?" },
-  { c: "定着・離職", q: "離職の兆候を1ヶ月早く掴めたら、引き止め可能な人数は年何人?" },
-  { c: "定着・離職", q: "退職手続き・引き継ぎ1件にかかる総工数は何時間?" },
-  // 労務・HRオペレーション
-  { c: "労務オペ", q: "従業員100人の会社、勤怠の締め作業に毎月何時間かかっている?" },
-  { c: "労務オペ", q: "入社手続きの電子化で、1人あたりの手続き時間は何分縮む?" },
-  { c: "労務オペ", q: "給与明細の紙配布をやめたら、年間コストはいくら減る?" },
-  { c: "労務オペ", q: "年末調整の書類回収・確認に、人事は毎年何時間かけている?" },
-  { c: "労務オペ", q: "問い合わせの多い人事FAQ、上位10件で全体の何割を占める?" },
-  { c: "労務オペ", q: "経費精算の申請1件を承認まで通すのに、平均何日かかる?" },
-  { c: "労務オペ", q: "紙の履歴書100件/月をデータ化したら、入力工数は月何時間減る?" },
-  // 研修・育成
-  { c: "研修・育成", q: "新人研修を動画化したら、講師の年間稼働は何時間減る?" },
-  { c: "研修・育成", q: "1人前になるまでの育成コスト(OJT担当の工数含む)はいくら?" },
-  { c: "研修・育成", q: "研修を内製 vs 外部講師。内製が安くなるのは受講者何人から?" },
-  { c: "研修・育成", q: "eラーニング導入で、集合研修の会場・移動コストは年いくら減る?" },
-  { c: "研修・育成", q: "OJT担当が新人1人に付きっきりの期間、その人の生産性は何%落ちる?" },
-  { c: "研修・育成", q: "マニュアル整備で新人の質問対応が半減したら、先輩の工数は月何時間浮く?" }
+  // 採用母集団(人口から逆算)
+  { c: "採用母集団", q: "{A}で20代を50人採用するには、エリアの20代人口の何%にリーチする必要がある?" },
+  { c: "採用母集団", q: "{A}の20代人口のうち、いま実際に仕事を探している人は何人いる?" },
+  { c: "採用母集団", q: "{A}で飲食スタッフを100人集めるとしたら、募集に何ヶ月かかる?" },
+  { c: "採用母集団", q: "{A}の全事業所が1人ずつ採用したら、必要な人数はエリア人口で賄えるか?" },
+  { c: "採用母集団", q: "{A}で新卒を1人採るのに、エリア内の何人にアプローチが必要?" },
+  { c: "採用母集団", q: "{A}の20代人口を事業所数で割ると、1社あたり何人の若手候補がいる?" },
+  { c: "採用母集団", q: "{A}で時給を50円上げたとき、動く候補者は何人増える?" },
+  { c: "採用母集団", q: "{A}の人口規模だと、求人1件あたりの応募は何件が妥当?" },
+  // 事業所密度と競合
+  { c: "競合密度", q: "{A}で求人を出すと、同じエリアの何社と人材を取り合うことになる?" },
+  { c: "競合密度", q: "{A}の事業所1社あたりの従業員数は?この規模で採用担当は専任を置けるか?" },
+  { c: "競合密度", q: "{A}の事業所数から、エリア全体で年間に発生する採用ニーズは何人分?" },
+  { c: "競合密度", q: "{A}の事業所密度だと、1人の求職者に何社の求人が届く計算になる?" },
+  { c: "競合密度", q: "{A}で他社より応募を集めるには、時給をいくら上乗せする必要がある?" },
+  { c: "競合密度", q: "{A}の事業所が全て離職率15%だとすると、毎年何人が転職市場に出る?" },
+  { c: "競合密度", q: "{A}の従業員数と事業所数から、小規模事業所が多い街か大企業の街かを判定できる?" },
+  // 昼間人口と通勤
+  { c: "昼間人口", q: "{A}は従業員数が人口を上回っている?通勤で流入しているのは何人?" },
+  { c: "昼間人口", q: "{A}で働く人のうち、エリア内に住んでいる人は何割?" },
+  { c: "昼間人口", q: "{A}の従業員数を支えるには、周辺エリアから何人が通勤している必要がある?" },
+  { c: "昼間人口", q: "{A}で「地元採用」に絞ると、母集団は何分の1になる?" },
+  { c: "昼間人口", q: "{A}の通勤流入者が地元転職を考えたら、採用可能人数はどれだけ増える?" },
+  { c: "昼間人口", q: "{A}の従業員数から、朝のピーク時に駅を通る人は何人?" },
+  // 年代構成から戦略を変える
+  { c: "年代構成", q: "{A}は20代と50代どちらが多い?採用ターゲットをどちらに置くべき?" },
+  { c: "年代構成", q: "{A}の60代人口から、シニア再雇用で採れる人材は何人?" },
+  { c: "年代構成", q: "{A}の30代人口と世帯数から、子育て世帯は何世帯ある?時短勤務の需要は?" },
+  { c: "年代構成", q: "{A}の40代人口のうち、管理職経験者は何人いる計算になる?" },
+  { c: "年代構成", q: "{A}で20代が減り続けたら、10年後の採用可能人数は何人になる?" },
+  { c: "年代構成", q: "{A}の50代人口から、今後10年で定年退職する人は何人?" },
+  { c: "年代構成", q: "{A}の年代構成だと、若手とシニアどちらの採用単価が安くなる?" },
+  // 世帯構成と働き方
+  { c: "世帯・働き方", q: "{A}の人口と世帯数から平均世帯人数は?単身者が多い街か?" },
+  { c: "世帯・働き方", q: "{A}の単身世帯の多さから、深夜シフトに入れる人材は何人いる?" },
+  { c: "世帯・働き方", q: "{A}でファミリー層が多いなら、9-15時のシフトで何人採れる?" },
+  { c: "世帯・働き方", q: "{A}の世帯数から、パート希望の主婦層は何人いる計算?" },
+  { c: "世帯・働き方", q: "{A}で在宅勤務が可能な職種の人は何人いる?" },
+  { c: "世帯・働き方", q: "{A}の世帯構成から、扶養内で働きたい人の割合は?" },
+  // 街の特性を比較する
+  { c: "エリア比較", q: "{A}と隣接エリアで、20代人口はどちらが多い?採用拠点をどちらに置く?" },
+  { c: "エリア比較", q: "{A}の事業所あたり従業員数は、区の平均と比べて大きい?小さい?" },
+  { c: "エリア比較", q: "{A}に店を出すなら、人材確保の面で何が有利で何が不利?" },
+  { c: "エリア比較", q: "{A}の人口密度から、チラシ求人とWeb求人どちらが効率的?" },
+  { c: "エリア比較", q: "{A}で採用単価が他エリアより高くなる理由を、数字で説明できる?" },
+  { c: "エリア比較", q: "{A}の労働市場の厚みを、人口と事業所数の比率で表すと?" },
+  // 具体的な採用シナリオ
+  { c: "採用シナリオ", q: "{A}に新店を出して10人採用する。オープンまでに間に合うか?" },
+  { c: "採用シナリオ", q: "{A}で急に5人辞めた。同じ質の人材を揃え直すのに何ヶ月かかる?" },
+  { c: "採用シナリオ", q: "{A}で50人規模の事業所を作るなら、エリア人口のどれだけを吸収する?" },
+  { c: "採用シナリオ", q: "{A}の飲食店が深夜営業をやめたら、必要な人員は何人減る?" },
+  { c: "採用シナリオ", q: "{A}で1店舗を24時間営業にするには、何人のスタッフが必要?" },
+  { c: "採用シナリオ", q: "{A}の事業所が一斉に週休3日にしたら、追加で何人必要になる?" },
+  { c: "採用シナリオ", q: "{A}で最低賃金が50円上がったら、エリア全体の人件費は年いくら増える?" },
+  { c: "採用シナリオ", q: "{A}で外国人スタッフを雇うとしたら、採用可能な母集団は何人?" }
 ];
+
 
 var EPOCH = new Date(2026, 6, 18); // 2026-07-18 = File #001
 var currentIndex = 0;
@@ -480,22 +605,54 @@ function showQuestion(idx) {
   currentIndex = idx;
   var item = QUESTIONS[idx];
   document.getElementById("catTag").textContent = item.c;
-  document.getElementById("questionBox").textContent = "Q. " + item.q;
+  document.getElementById("questionBox").textContent = "Q. " + questionText(idx);
   document.getElementById("btnToday").style.display = (idx === todayIndex) ? "none" : "inline";
   updatePreview();
 }
 
 var postMode = "type";
 
+// お題の {A} を選択エリア名に置き換える
+function questionText(idx) {
+  var raw = QUESTIONS[idx].q;
+  var nm = selectedArea ? selectedArea.n : "このエリア";
+  return raw.replace(/\{A\}/g, nm);
+}
+
+// エリア名が実際に計算で使われている(またはお題が地域系)ときだけ地名を出す
+function areaIsRelevant() {
+  if (!selectedArea) { return false; }
+  var nm = selectedArea.n;
+  // お題自体が地域×HR、または設問文に地名が含まれる
+  var qq = QUESTIONS[currentIndex];
+  if (qq.q.indexOf("{A}") >= 0) { return true; }
+  if (qq.q.indexOf(nm) >= 0) { return true; }
+  // 計算式の変数名にエリア名が入っている
+  var key;
+  for (key in varValues) {
+    if (Object.prototype.hasOwnProperty.call(varValues, key) && key.indexOf(nm) >= 0) {
+      return true;
+    }
+  }
+  var li, i, toks;
+  for (li = 0; li < calcLines.length; li++) {
+    toks = calcLines[li].tokens;
+    for (i = 0; i < toks.length; i++) {
+      if (toks[i].v && String(toks[i].v).indexOf(nm) >= 0) { return true; }
+    }
+  }
+  return false;
+}
+
 function buildPost() {
   var a = document.getElementById("answerInput").value.trim();
   var logic = document.getElementById("logicInput").value.trim();
-  var q = QUESTIONS[currentIndex].q;
+  var q = questionText(currentIndex);
   var lines = [];
 
   if (postMode === "type") {
     // 数字入りの分解を配る:名前+数字が並ぶので型と数字が同時に伝わる
-    lines.push("\uD83D\uDD0D フェルミ捜査");
+    lines.push("\uD83D\uDD0D フェルミ捜査" + (areaIsRelevant() ? " — " + selectedArea.n : ""));
     lines.push(q);
     lines.push("");
     var nums = buildNumberLines();
@@ -744,6 +901,7 @@ function updatePreview() {
   var box = document.getElementById("countBox");
   box.textContent = len + " / 280";
   box.className = (len > 280) ? "count over" : "count";
+  if (typeof refreshAreaBadge === "function") { refreshAreaBadge(); }
   var chk = checkFactorization();
   var fb = document.getElementById("factCheck");
   if (postMode !== "type") {
@@ -766,7 +924,7 @@ function pad3(n) {
 
 // ---- インフォグラフィック用プロンプト生成 ----
 function buildInfographicPrompt() {
-  var q = QUESTIONS[currentIndex].q;
+  var q = questionText(currentIndex);
   var parts = buildNumberParts();
   var logic = document.getElementById("logicInput").value.trim();
   var lines = [];
@@ -774,7 +932,7 @@ function buildInfographicPrompt() {
   lines.push("日本語のインフォグラフィックを1枚作成してください。縦4:5、SNS投稿用。");
   lines.push("");
   lines.push("■ タイトル(上部に大きく)");
-  lines.push(q);
+  lines.push(areaIsRelevant() ? ("【" + selectedArea.n + "】" + q) : q);
   lines.push("");
 
   if (parts.mid.length > 0 || parts.concl.length > 0) {
@@ -843,6 +1001,92 @@ function fallbackCopyRaw(text) {
   try { document.execCommand("copy"); } catch (e) {}
   document.body.removeChild(ta);
   showToast("プロンプトをコピーしました");
+}
+
+// ---- 地域データパネル ----
+function initAreaPanel() {
+  var sel = document.getElementById("areaSelect");
+  var html = '<option value="">-- エリアを選ぶ --</option>';
+  var cities = ["杉並区", "中野区", "武蔵野市"];
+  var ci, i;
+  for (ci = 0; ci < cities.length; ci++) {
+    html += '<optgroup label="' + cities[ci] + '">';
+    for (i = 0; i < AREA_DATA.length; i++) {
+      if (AREA_DATA[i].c === cities[ci]) {
+        html += '<option value="' + i + '">' + esc(AREA_DATA[i].n)
+          + "(" + esc(AREA_DATA[i].st) + ")</option>";
+      }
+    }
+    html += "</optgroup>";
+  }
+  sel.innerHTML = html;
+  sel.addEventListener("change", renderAreaStats);
+  renderAreaStats();
+}
+
+function refreshAreaBadge() {
+  var badge = document.getElementById("areaBadge");
+  if (!selectedArea) { badge.innerHTML = ""; return; }
+  if (areaIsRelevant()) {
+    badge.innerHTML = '<span class="area-badge">' + esc(selectedArea.n) + " / "
+      + esc(selectedArea.st) + "</span>";
+  } else {
+    badge.innerHTML = '<span class="area-badge unused">' + esc(selectedArea.n)
+      + "(データ未使用 — 投稿には出ません)</span>";
+  }
+}
+
+function renderAreaStats() {
+  var sel = document.getElementById("areaSelect");
+  var box = document.getElementById("areaStats");
+  var badge = document.getElementById("areaBadge");
+  var idx = sel.value;
+  if (idx === "") {
+    box.innerHTML = '<div class="stat-note">エリアを選ぶと実データが出ます。数字をタップすると計算機に入ります</div>';
+    badge.innerHTML = "";
+    selectedArea = null;
+    showQuestion(currentIndex);
+    return;
+  }
+  var a = AREA_DATA[parseInt(idx, 10)];
+  selectedArea = a;
+  refreshAreaBadge();
+  showQuestion(currentIndex);
+  var stats = [
+    { k: "人口", v: a.pop, u: "人" },
+    { k: "世帯数", v: a.hh, u: "世帯" },
+    { k: "20代人口", v: a.p20, u: "人" },
+    { k: "30代人口", v: a.p30, u: "人" },
+    { k: "40代人口", v: a.p40, u: "人" },
+    { k: "50代人口", v: a.p50, u: "人" },
+    { k: "60代人口", v: a.p60, u: "人" },
+    { k: "事業所数", v: a.biz, u: "社" },
+    { k: "従業員数", v: a.emp, u: "人" },
+    { k: "1事業所あたり従業員", v: Math.round((a.emp / a.biz) * 10) / 10, u: "人" }
+  ];
+  var html = '<div class="stat-chips">';
+  var i;
+  for (i = 0; i < stats.length; i++) {
+    html += '<button type="button" class="stat-chip" data-name="' + esc(a.n + "の" + stats[i].k) + '"'
+      + ' data-val="' + esc(String(stats[i].v) + stats[i].u) + '">'
+      + esc(stats[i].k) + "<b>" + esc(String(stats[i].v)) + "</b></button>";
+  }
+  html += "</div>";
+  html += '<div class="stat-note">' + esc(a.n) + "(" + esc(a.c) + "・最寄" + esc(a.st)
+    + ")— タップすると式に言葉で入り、数値欄に実数が自動で入ります</div>";
+  box.innerHTML = html;
+  var chips = box.querySelectorAll(".stat-chip");
+  for (i = 0; i < chips.length; i++) {
+    chips[i].addEventListener("click", function () {
+      var name = this.getAttribute("data-name");
+      var val = this.getAttribute("data-val");
+      // 先に数値を登録してから、式に言葉を挿入(挿入時の再描画で欄が埋まる)
+      varValues[name] = val;
+      insertKey(name);
+      showToast(name + " = " + val + " を入れました");
+    });
+  }
+  updatePreview();
 }
 
 function copyText() {
@@ -928,7 +1172,7 @@ function saveHistory() {
   var entry = {
     d: todayKey(),
     no: fileNo,
-    q: QUESTIONS[currentIndex].q,
+    q: questionText(currentIndex),
     a: a
   };
   hist = hist.filter(function (h) { return !(h.d === entry.d && h.q === entry.q); });
@@ -1536,6 +1780,7 @@ function init() {
   showQuestion(todayIndex);
   renderHistory();
   document.getElementById("verBox").textContent = APP_VERSION + " (" + APP_UPDATED + ")";
+  initAreaPanel();
   var data = loadJSON("fermiDaily_streak", { last: "", count: 0 });
   renderStreak(data.count);
 
